@@ -1,6 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Layers, Settings, Download, Undo2, Redo2, Plus } from "lucide-react";
+import { ArrowLeft, Layers, Settings, Download, Undo2, Redo2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import ComponentTree, { type TreeNode } from "@/components/builder/ComponentTree";
@@ -8,7 +8,54 @@ import PropertiesPanel from "@/components/builder/PropertiesPanel";
 import MobilePreview from "@/components/builder/MobilePreview";
 import { useAuth } from "@/hooks/use-auth";
 import { exportProject } from "@/lib/export";
+import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
+
+function buildTreeFromSession(componentTree: any[]): TreeNode[] {
+  if (!componentTree?.length) return [];
+  const root: TreeNode = {
+    id: "root",
+    type: "ScrollView",
+    label: "Screen",
+    props: { style: { backgroundColor: "#ffffff", padding: 0 } },
+    children: componentTree.map((page: any, i: number) => ({
+      id: `page-${i}`,
+      type: "View",
+      label: page.pageName || `Page ${i + 1}`,
+      props: {
+        style: {
+          padding: 16,
+          ...(i === 0 ? { backgroundColor: "#7c3aed" } : {}),
+        },
+      },
+      children: [
+        {
+          id: `page-${i}-title`,
+          type: "Text",
+          label: `${page.pageName || "Page"} Title`,
+          props: {
+            text: page.pageName || `Page ${i + 1}`,
+            style: {
+              fontSize: 20,
+              fontWeight: "bold",
+              color: i === 0 ? "#ffffff" : "#1a1a1a",
+            },
+          },
+        },
+        {
+          id: `page-${i}-design`,
+          type: "Text",
+          label: "Design Label",
+          props: {
+            text: `Design: ${page.designName || "Custom"}`,
+            style: { fontSize: 12, color: i === 0 ? "#e0d4fc" : "#666", marginTop: 4 },
+          },
+        },
+      ],
+    })),
+  };
+  return [root];
+}
 
 const defaultTree: TreeNode[] = [
   {
@@ -139,6 +186,33 @@ export default function Builder() {
   const [selectedNode, setSelectedNode] = useState<TreeNode | null>(null);
   const [activePanel, setActivePanel] = useState<"tree" | "props">("tree");
   const [exporting, setExporting] = useState(false);
+  const [loadingSession, setLoadingSession] = useState(true);
+
+  useEffect(() => {
+    const loadSession = async () => {
+      if (!id || !user) { setLoadingSession(false); return; }
+      try {
+        const { data } = await supabase
+          .from("builder_sessions")
+          .select("component_tree")
+          .eq("project_id", id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (data?.component_tree?.length) {
+          const sessionTree = buildTreeFromSession(data.component_tree);
+          if (sessionTree.length) {
+            setTree(sessionTree);
+            toast.success("Builder loaded from your design selections");
+          }
+        }
+      } catch {} finally {
+        setLoadingSession(false);
+      }
+    };
+    loadSession();
+  }, [id, user]);
 
   const handleSelect = useCallback((node: TreeNode) => {
     setSelectedNode(node);
@@ -166,6 +240,14 @@ export default function Builder() {
       setExporting(false);
     }
   };
+
+  if (loadingSession) {
+    return (
+      <div className="flex h-screen items-center justify-center pt-16">
+        <Loader2 className="h-8 w-8 animate-spin text-violet-400" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen flex-col pt-16">

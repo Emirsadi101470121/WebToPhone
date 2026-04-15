@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Menu, X, Zap } from "lucide-react";
+import { Menu, X, Zap, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -16,6 +16,22 @@ export default function Navbar() {
   const location = useLocation();
   const isHome = location.pathname === "/";
   const { user, loading } = useAuth();
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
+
+  const toggleTheme = () => {
+    const next = !isDark;
+    setIsDark(next);
+    document.documentElement.classList.toggle("dark", next);
+    localStorage.setItem("theme", next ? "dark" : "light");
+  };
+
+  useEffect(() => {
+    const saved = localStorage.getItem("theme");
+    if (saved === "light") {
+      document.documentElement.classList.remove("dark");
+      setIsDark(false);
+    }
+  }, []);
 
   const handleNavClick = (href: string) => {
     setMobileOpen(false);
@@ -50,6 +66,13 @@ export default function Navbar() {
 
         {!loading && (
           <div className="hidden items-center gap-3 md:flex">
+            <button
+              onClick={toggleTheme}
+              className="rounded-lg p-2 text-muted-foreground transition-colors hover:text-foreground"
+              title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </button>
             {user ? (
               <Link to="/dashboard">
                 <Button size="sm" className="bg-primary hover:bg-primary/90">
@@ -98,6 +121,13 @@ export default function Navbar() {
               {link.label}
             </Link>
           ))}
+          <button
+              onClick={toggleTheme}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              {isDark ? "Light Mode" : "Dark Mode"}
+            </button>
           <div className="flex flex-col gap-2 pt-2">
             {user ? (
               <Link to="/dashboard" onClick={() => setMobileOpen(false)}>

@@ -293,7 +293,34 @@ export default function Project() {
         <h1 className="text-2xl font-bold">{project.name}</h1>
         {project.description && <p className="mt-1 text-sm text-muted-foreground">{project.description}</p>}
 
-        <div className="mt-6 flex gap-1 overflow-x-auto pb-2">
+        {/* Progress Bar */}
+        <div className="mt-6">
+          <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
+            <span>Progress</span>
+            <span>
+              {currentStage === "qa-done"
+                ? "Complete"
+                : stageIndex >= 0
+                  ? `${stageIndex + 1} of ${stages.length}`
+                  : "Not started"}
+            </span>
+          </div>
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/5">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-violet-500 to-violet-400 transition-all duration-500"
+              style={{
+                width: currentStage === "qa-done"
+                  ? "100%"
+                  : stageIndex >= 0
+                    ? `${((stageIndex + (stageLoading ? 0.5 : 0)) / stages.length) * 100}%`
+                    : "0%",
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Stage Pills */}
+        <div className="mt-4 flex gap-1 overflow-x-auto pb-2 scrollbar-thin">
           {stages.map((stage, i) => {
             const isActive = stage.key === currentStage;
             const isDone = stageIndex > i || currentStage === "qa-done";
@@ -303,7 +330,7 @@ export default function Project() {
                 key={stage.key}
                 className={cn(
                   "flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-xs transition-all",
-                  isActive ? "border-violet-500 bg-violet-500/10 text-violet-300" :
+                  isActive ? "border-violet-500 bg-violet-500/10 text-violet-300 shadow-sm shadow-violet-500/10" :
                   isDone ? "border-emerald-500/20 bg-emerald-500/5 text-emerald-400" :
                   "border-white/5 text-muted-foreground/50"
                 )}
@@ -312,7 +339,7 @@ export default function Project() {
                  isActive && stageLoading ? <Loader2 className="h-3 w-3 animate-spin" /> :
                  isActive ? <Icon className="h-3 w-3" /> :
                  <Circle className="h-3 w-3" />}
-                {stage.label}
+                <span className="hidden sm:inline">{stage.label}</span>
               </div>
             );
           })}

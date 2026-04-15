@@ -17,6 +17,7 @@ import Project from "./pages/Project";
 import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
 import Builder from "./pages/Builder";
+import Settings from "./pages/Settings";
 import Placeholder from "./pages/Placeholder";
 import NotFound from "./pages/NotFound";
 
@@ -40,6 +41,7 @@ export default function App() {
               <Route path="/new-project" element={<ProtectedRoute><NewProject /></ProtectedRoute>} />
               <Route path="/project/:id" element={<ProtectedRoute><Project /></ProtectedRoute>} />
               <Route path="/builder/:id" element={<ProtectedRoute><Builder /></ProtectedRoute>} />
+              <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
               <Route path="/about" element={<Placeholder />} />
               <Route path="/blog" element={<Placeholder />} />
               <Route path="/careers" element={<Placeholder />} />
