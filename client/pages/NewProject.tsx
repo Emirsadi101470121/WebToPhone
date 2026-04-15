@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import GithubRepoPicker from "@/components/GithubRepoPicker";
+import ZipUploader from "@/components/ZipUploader";
 
 type SourceType = "github" | "zip" | "url";
 
@@ -38,11 +39,12 @@ export default function NewProject() {
   const [description, setDescription] = useState("");
   const [sourceType, setSourceType] = useState<SourceType | null>(null);
   const [sourceUrl, setSourceUrl] = useState("");
+  const [uploadedStorageKey, setUploadedStorageKey] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   const canProceedStep2 =
-    sourceType === "zip" || (sourceType && sourceUrl.trim());
+    (sourceType === "zip" && uploadedStorageKey) || (sourceType !== "zip" && sourceUrl.trim());
 
   const handleCreate = async () => {
     if (!name.trim() || !sourceType || !user) return;
@@ -185,16 +187,11 @@ export default function NewProject() {
 
             {sourceType === "zip" && (
               <div>
-                <label className="mb-1.5 block text-sm font-medium">Upload ZIP File</label>
-                <div className="flex cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-white/10 bg-muted/30 p-10 text-center transition-colors hover:border-violet-500/20">
-                  <div>
-                    <FileArchive className="mx-auto h-10 w-10 text-muted-foreground" />
-                    <p className="mt-3 text-sm text-muted-foreground">
-                      Drag and drop your ZIP file here, or click to browse
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">Max 50MB</p>
-                  </div>
-                </div>
+                <label className="mb-3 block text-sm font-medium">Upload ZIP File</label>
+                <ZipUploader
+                  projectName={name}
+                  onUploadComplete={(key) => setUploadedStorageKey(key)}
+                />
               </div>
             )}
 

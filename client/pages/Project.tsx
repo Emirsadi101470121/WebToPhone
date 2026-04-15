@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   ArrowLeft,
   Search,
@@ -354,12 +354,16 @@ export default function Project() {
               Your React Native app is ready. Open the visual builder or export.
             </p>
             <div className="mt-6 flex justify-center gap-3">
-              <Button className="gap-2 bg-primary hover:bg-primary/90">
-                Open Visual Builder
-              </Button>
-              <Button variant="outline">
-                Export Project
-              </Button>
+              <Link to={`/builder/${project.id}`}>
+                <Button className="gap-2 bg-primary hover:bg-primary/90">
+                  Open Visual Builder
+                </Button>
+              </Link>
+              <Link to={`/builder/${project.id}`}>
+                <Button variant="outline" className="gap-2">
+                  Export Project
+                </Button>
+              </Link>
             </div>
           </div>
         )}

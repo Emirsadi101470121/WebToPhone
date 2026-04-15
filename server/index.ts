@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 import { handleDemo } from "./routes/demo";
 import { handleAnalyze, handleConvert } from "./routes/analyze";
+import { handleExport } from "./routes/export";
 import {
   handleGithubAuth,
   handleGithubCallback,
@@ -26,6 +27,8 @@ export function createServer() {
   app.get("/api/demo", handleDemo);
   app.post("/api/analyze", handleAnalyze);
   app.post("/api/convert", handleConvert);
+
+  app.post("/api/export", handleExport);
 
   app.get("/api/github/auth", handleGithubAuth);
   app.get("/api/github/callback", handleGithubCallback);
