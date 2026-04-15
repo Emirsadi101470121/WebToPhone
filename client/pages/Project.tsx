@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import ValidationStep from "@/components/pipeline/ValidationStep";
 import DesignInterviewStep from "@/components/pipeline/DesignInterviewStep";
 import DesignSelectionStep from "@/components/pipeline/DesignSelectionStep";
+import { fetchWithRetry } from "@/lib/retry";
 
 interface ProjectData {
   id: string;
@@ -108,7 +109,7 @@ export default function Project() {
     try {
       await supabase.from("projects").update({ status: "analyzing" }).eq("id", project.id);
 
-      const response = await fetch("/api/analyze", {
+      const response = await fetchWithRetry("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -168,7 +169,7 @@ export default function Project() {
         ux_complexity: prefs.uxPriority === "power" ? "advanced" : prefs.uxPriority === "simplicity" ? "simple" : "moderate",
       }, { onConflict: "project_id" });
 
-      const response = await fetch("/api/reimagine", {
+      const response = await fetchWithRetry("/api/reimagine", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -228,7 +229,7 @@ export default function Project() {
     setStageLoading(true);
 
     try {
-      const response = await fetch("/api/convert", {
+      const response = await fetchWithRetry("/api/convert", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

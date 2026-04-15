@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Github, Globe, FileArchive, ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
+import { Github, Globe, FileArchive, ArrowLeft, ArrowRight, Loader2, ShoppingCart, LayoutDashboard, Users, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
@@ -9,6 +9,37 @@ import GithubRepoPicker from "@/components/GithubRepoPicker";
 import ZipUploader from "@/components/ZipUploader";
 
 type SourceType = "github" | "zip" | "url";
+
+const templates = [
+  {
+    id: "ecommerce",
+    icon: ShoppingCart,
+    name: "E-Commerce App",
+    description: "Product catalog, cart, checkout, and order tracking",
+    demoUrl: "https://demo-ecommerce.example.com",
+  },
+  {
+    id: "dashboard",
+    icon: LayoutDashboard,
+    name: "Admin Dashboard",
+    description: "Analytics, charts, user management, and settings",
+    demoUrl: "https://demo-dashboard.example.com",
+  },
+  {
+    id: "social",
+    icon: Users,
+    name: "Social Platform",
+    description: "Feed, profiles, messaging, and notifications",
+    demoUrl: "https://demo-social.example.com",
+  },
+  {
+    id: "blank",
+    icon: Smartphone,
+    name: "Blank Project",
+    description: "Start from scratch with your own source",
+    demoUrl: "",
+  },
+];
 
 const sources = [
   {
@@ -34,7 +65,8 @@ const sources = [
 export default function NewProject() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(0);
+  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [sourceType, setSourceType] = useState<SourceType | null>(null);
@@ -42,6 +74,18 @@ export default function NewProject() {
   const [uploadedStorageKey, setUploadedStorageKey] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  const handleTemplateSelect = (templateId: string) => {
+    setSelectedTemplate(templateId);
+    const tpl = templates.find((t) => t.id === templateId);
+    if (tpl && templateId !== "blank") {
+      setName(tpl.name);
+      setDescription(tpl.description);
+      setSourceType("url");
+      setSourceUrl(tpl.demoUrl);
+    }
+    setStep(1);
+  };
 
   const canProceedStep2 =
     (sourceType === "zip" && uploadedStorageKey) || (sourceType !== "zip" && sourceUrl.trim());
@@ -95,7 +139,7 @@ export default function NewProject() {
         </p>
 
         <div className="mt-4 flex gap-2">
-          {[1, 2].map((s) => (
+          {[0, 1, 2].map((s) => (
             <div
               key={s}
               className={cn(
@@ -105,6 +149,36 @@ export default function NewProject() {
             />
           ))}
         </div>
+
+        {step === 0 && (
+          <div className="mt-8 space-y-6">
+            <div>
+              <label className="mb-3 block text-sm font-medium">Choose a Template</label>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {templates.map((tpl) => (
+                  <button
+                    key={tpl.id}
+                    onClick={() => handleTemplateSelect(tpl.id)}
+                    className={cn(
+                      "flex items-start gap-3 rounded-xl border p-4 text-left transition-all",
+                      selectedTemplate === tpl.id
+                        ? "border-violet-500 bg-violet-500/10"
+                        : "border-white/5 bg-card hover:border-violet-500/20"
+                    )}
+                  >
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-500/10">
+                      <tpl.icon className="h-5 w-5 text-violet-400" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-medium">{tpl.name}</h3>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{tpl.description}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {step === 1 && (
           <div className="mt-8 space-y-6">
@@ -157,14 +231,19 @@ export default function NewProject() {
               </div>
             </div>
 
-            <Button
-              onClick={() => setStep(2)}
-              disabled={!name.trim() || !sourceType}
-              className="w-full gap-2 bg-primary hover:bg-primary/90"
-            >
-              Continue
-              <ArrowRight className="h-4 w-4" />
-            </Button>
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={() => setStep(0)} className="flex-1">
+                Back
+              </Button>
+              <Button
+                onClick={() => setStep(2)}
+                disabled={!name.trim() || !sourceType}
+                className="flex-1 gap-2 bg-primary hover:bg-primary/90"
+              >
+                Continue
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         )}
 
@@ -241,7 +320,7 @@ export default function NewProject() {
             )}
 
             <div className="flex gap-3">
-              <Button variant="outline" onClick={() => setStep(1)} className="flex-1">
+              <Button variant="outline" onClick={() => setStep(selectedTemplate === "blank" ? 1 : 0)} className="flex-1">
                 Back
               </Button>
               <Button

@@ -214,6 +214,23 @@ export default function Builder() {
     loadSession();
   }, [id, user]);
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const isMod = e.metaKey || e.ctrlKey;
+      if (isMod && e.key === "e") {
+        e.preventDefault();
+        handleExport();
+      }
+      if (e.key === "Escape") {
+        setSelectedNode(null);
+        setActivePanel("tree");
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [id, user]);
+
   const handleSelect = useCallback((node: TreeNode) => {
     setSelectedNode(node);
     setActivePanel("props");

@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { Zap, Eye, EyeOff } from "lucide-react";
+import { Zap, Eye, EyeOff, Github } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
+import { supabase } from "@/lib/supabase";
 
 export default function Login() {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -68,6 +69,31 @@ export default function Login() {
               ? "Start converting web apps to mobile"
               : "Sign in to your Morphic account"}
           </p>
+        </div>
+
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full gap-2 border-white/10"
+          onClick={async () => {
+            const { error } = await supabase.auth.signInWithOAuth({
+              provider: "github",
+              options: { redirectTo: `${window.location.origin}/dashboard` },
+            });
+            if (error) setError(error.message);
+          }}
+        >
+          <Github className="h-4 w-4" />
+          Continue with GitHub
+        </Button>
+
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-white/10" />
+          </div>
+          <div className="relative flex justify-center">
+            <span className="bg-background px-3 text-xs text-muted-foreground">or</span>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">

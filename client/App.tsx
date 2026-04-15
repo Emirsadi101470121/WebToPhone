@@ -20,6 +20,7 @@ import Builder from "./pages/Builder";
 import Settings from "./pages/Settings";
 import Placeholder from "./pages/Placeholder";
 import NotFound from "./pages/NotFound";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 const queryClient = new QueryClient();
 
@@ -32,6 +33,7 @@ export default function App() {
           <Sonner />
           <BrowserRouter>
             <Navbar />
+            <ErrorBoundary>
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/login" element={<Login />} />
@@ -47,6 +49,7 @@ export default function App() {
               <Route path="/careers" element={<Placeholder />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
+            </ErrorBoundary>
             <Footer />
           </BrowserRouter>
         </TooltipProvider>

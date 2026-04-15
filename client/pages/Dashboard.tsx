@@ -15,12 +15,14 @@ import {
   Trash2,
   RefreshCw,
   Settings,
+  Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
+import OnboardingTour from "@/components/OnboardingTour";
 
 interface Project {
   id: string;
@@ -85,6 +87,14 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+
+  const filteredProjects = projects.filter((p) => {
+    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus = statusFilter === "all" || p.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
 
   const loadData = useCallback(async (showRefresh = false) => {
     if (showRefresh) setRefreshing(true);
@@ -154,6 +164,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen pt-20">
+      <OnboardingTour />
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between">
           <div>
@@ -206,7 +217,34 @@ export default function Dashboard() {
         </div>
 
         <div className="mt-8">
-          <h2 className="text-lg font-semibold">Your Projects</h2>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="text-lg font-semibold">Your Projects</h2>
+            <div className="flex gap-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Search projects..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-9 w-48 rounded-lg border border-white/10 bg-muted/50 pl-9 pr-3 text-sm outline-none focus:border-violet-500"
+                />
+              </div>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="h-9 rounded-lg border border-white/10 bg-muted/50 px-3 text-sm outline-none focus:border-violet-500"
+              >
+                <option value="all">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="analyzing">Analyzing</option>
+                <option value="analyzed">Analyzed</option>
+                <option value="converting">Converting</option>
+                <option value="completed">Completed</option>
+                <option value="failed">Failed</option>
+              </select>
+            </div>
+          </div>
 
           {loading ? (
             <div className="mt-4 space-y-3">
@@ -214,7 +252,7 @@ export default function Dashboard() {
                 <div key={i} className="h-20 animate-pulse rounded-xl border border-white/5 bg-card" />
               ))}
             </div>
-          ) : projects.length === 0 ? (
+          ) : filteredProjects.length === 0 && projects.length === 0 ? (
             <div className="mt-6 rounded-2xl border border-dashed border-white/10 p-12 text-center">
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-500/10">
                 <Folder className="h-6 w-6 text-violet-400" />
@@ -230,9 +268,13 @@ export default function Dashboard() {
                 </Button>
               </Link>
             </div>
+          ) : filteredProjects.length === 0 ? (
+            <div className="mt-6 rounded-xl border border-white/5 bg-card p-8 text-center">
+              <p className="text-sm text-muted-foreground">No projects match your filters</p>
+            </div>
           ) : (
             <div className="mt-4 space-y-3">
-              {projects.map((project) => (
+              {filteredProjects.map((project) => (
                 <Link
                   key={project.id}
                   to={`/project/${project.id}`}

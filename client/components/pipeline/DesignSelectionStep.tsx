@@ -104,11 +104,18 @@ export default function DesignSelectionStep({ designs, onConfirm }: Props) {
                     </div>
                   )}
 
-                  <div className="mx-auto w-40">
-                    <div className="overflow-hidden rounded-xl border border-white/10 bg-white shadow-sm">
-                      <div className="h-4 bg-zinc-100" />
-                      <div className="h-48 overflow-hidden">
+                  <div className="mx-auto w-36">
+                    <div className="overflow-hidden rounded-2xl border-2 border-zinc-700 bg-white shadow-lg">
+                      {/* Phone notch */}
+                      <div className="flex h-5 items-center justify-center bg-zinc-800">
+                        <div className="h-1.5 w-10 rounded-full bg-zinc-600" />
+                      </div>
+                      <div className="h-52 overflow-hidden">
                         <MiniPreview layout={option.layout} />
+                      </div>
+                      {/* Phone home bar */}
+                      <div className="flex h-4 items-center justify-center bg-zinc-50">
+                        <div className="h-1 w-8 rounded-full bg-zinc-300" />
                       </div>
                     </div>
                   </div>

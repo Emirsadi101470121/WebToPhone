@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, User, CreditCard, Key, Loader2, Save } from "lucide-react";
+import { ArrowLeft, User, CreditCard, Key, Loader2, Save, BarChart3, Gift, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
@@ -20,12 +20,21 @@ interface SubData {
   status: string;
 }
 
+interface UsageEntry {
+  action: string;
+  count: number;
+}
+
 export default function Settings() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const [profile, setProfile] = useState<ProfileData>({ full_name: "", avatar_url: null });
   const [credits, setCredits] = useState<CreditsData>({ balance: 0 });
   const [subscription, setSubscription] = useState<SubData>({ plan: "free", status: "active" });
+  const [usage, setUsage] = useState<UsageEntry[]>([]);
+  const [referralCode, setReferralCode] = useState("");
+  const [referralCount, setReferralCount] = useState(0);
+  const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [fullName, setFullName] = useState("");
@@ -45,6 +54,40 @@ export default function Settings() {
         }
         if (creditsRes.data) setCredits(creditsRes.data);
         if (subRes.data) setSubscription(subRes.data);
+
+        // Load referral data
+        const { data: profileRef } = await supabase
+          .from("profiles")
+          .select("referral_code")
+          .eq("id", user.id)
+          .single();
+
+        if (profileRef?.referral_code) {
+          setReferralCode(profileRef.referral_code);
+        } else {
+          // Generate one
+          const code = `MORPHIC-${user.id.slice(0, 8).toUpperCase()}`;
+          await supabase.from("profiles").update({ referral_code: code }).eq("id", user.id);
+          setReferralCode(code);
+        }
+
+        const { count } = await supabase
+          .from("referrals")
+          .select("id", { count: "exact", head: true })
+          .eq("referrer_id", user.id)
+          .eq("status", "completed");
+        setReferralCount(count ?? 0);
+
+        // Load usage stats
+        const { data: logs } = await supabase
+          .from("logs")
+          .select("action")
+          .eq("user_id", user.id);
+        if (logs) {
+          const counts: Record<string, number> = {};
+          logs.forEach((l: any) => { counts[l.action] = (counts[l.action] || 0) + 1; });
+          setUsage(Object.entries(counts).map(([action, count]) => ({ action, count })));
+        }
       } catch {} finally {
         setLoading(false);
       }
@@ -155,6 +198,70 @@ export default function Settings() {
               <p className="text-xs text-muted-foreground">AI operations</p>
             </div>
           </div>
+        </section>
+
+        {/* Usage Analytics */}
+        <section className="mt-6 rounded-2xl border border-white/5 bg-card p-6">
+          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            <BarChart3 className="h-4 w-4" />
+            Usage Analytics
+          </h2>
+          {usage.length === 0 ? (
+            <p className="mt-4 text-xs text-muted-foreground">No activity yet. Start a project to see usage stats.</p>
+          ) : (
+            <div className="mt-4 space-y-3">
+              {usage.map((entry) => {
+                const maxCount = Math.max(...usage.map((u) => u.count), 1);
+                return (
+                  <div key={entry.action}>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="capitalize text-muted-foreground">{entry.action.replace(/_/g, " ")}</span>
+                      <span className="font-medium">{entry.count}</span>
+                    </div>
+                    <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-white/5">
+                      <div
+                        className="h-full rounded-full bg-violet-500 transition-all"
+                        style={{ width: `${(entry.count / maxCount) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        {/* Referral */}
+        <section className="mt-6 rounded-2xl border border-violet-500/10 bg-card p-6">
+          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            <Gift className="h-4 w-4" />
+            Referral Program
+          </h2>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Invite friends and earn 20 credits for each person who signs up and creates a project.
+          </p>
+          <div className="mt-4 flex items-center gap-2">
+            <code className="flex-1 rounded-lg border border-white/10 bg-background px-3 py-2 text-sm">
+              {referralCode}
+            </code>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                navigator.clipboard.writeText(referralCode);
+                setCopied(true);
+                toast.success("Referral code copied!");
+                setTimeout(() => setCopied(false), 2000);
+              }}
+              className="gap-1.5"
+            >
+              {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+              {copied ? "Copied" : "Copy"}
+            </Button>
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            <span className="font-medium text-violet-400">{referralCount}</span> successful referral{referralCount !== 1 ? "s" : ""}
+          </p>
         </section>
 
         {/* API Keys */}
