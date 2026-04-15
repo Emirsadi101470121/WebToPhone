@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { Menu, X, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/use-auth";
 
 const navLinks = [
   { label: "Features", href: "/#features" },
@@ -14,6 +15,7 @@ export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
   const isHome = location.pathname === "/";
+  const { user, loading } = useAuth();
 
   const handleNavClick = (href: string) => {
     setMobileOpen(false);
@@ -46,18 +48,30 @@ export default function Navbar() {
           ))}
         </nav>
 
-        <div className="hidden items-center gap-3 md:flex">
-          <Link to="/login">
-            <Button variant="ghost" size="sm">
-              Log in
-            </Button>
-          </Link>
-          <Link to="/dashboard">
-            <Button size="sm" className="bg-primary hover:bg-primary/90">
-              Get Started
-            </Button>
-          </Link>
-        </div>
+        {!loading && (
+          <div className="hidden items-center gap-3 md:flex">
+            {user ? (
+              <Link to="/dashboard">
+                <Button size="sm" className="bg-primary hover:bg-primary/90">
+                  Dashboard
+                </Button>
+              </Link>
+            ) : (
+              <>
+                <Link to="/login">
+                  <Button variant="ghost" size="sm">
+                    Log in
+                  </Button>
+                </Link>
+                <Link to="/login">
+                  <Button size="sm" className="bg-primary hover:bg-primary/90">
+                    Get Started
+                  </Button>
+                </Link>
+              </>
+            )}
+          </div>
+        )}
 
         <button
           className="inline-flex items-center justify-center rounded-lg p-2 text-muted-foreground md:hidden"
@@ -85,16 +99,26 @@ export default function Navbar() {
             </Link>
           ))}
           <div className="flex flex-col gap-2 pt-2">
-            <Link to="/login" onClick={() => setMobileOpen(false)}>
-              <Button variant="ghost" size="sm" className="w-full">
-                Log in
-              </Button>
-            </Link>
-            <Link to="/dashboard" onClick={() => setMobileOpen(false)}>
-              <Button size="sm" className="w-full bg-primary hover:bg-primary/90">
-                Get Started
-              </Button>
-            </Link>
+            {user ? (
+              <Link to="/dashboard" onClick={() => setMobileOpen(false)}>
+                <Button size="sm" className="w-full bg-primary hover:bg-primary/90">
+                  Dashboard
+                </Button>
+              </Link>
+            ) : (
+              <>
+                <Link to="/login" onClick={() => setMobileOpen(false)}>
+                  <Button variant="ghost" size="sm" className="w-full">
+                    Log in
+                  </Button>
+                </Link>
+                <Link to="/login" onClick={() => setMobileOpen(false)}>
+                  <Button size="sm" className="w-full bg-primary hover:bg-primary/90">
+                    Get Started
+                  </Button>
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </div>

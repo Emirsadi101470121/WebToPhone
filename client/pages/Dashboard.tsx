@@ -1,72 +1,49 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Plus,
   Folder,
   Clock,
   CreditCard,
   BarChart3,
-  Zap,
-  Upload,
+  Smartphone,
   Github,
   Globe,
   FileArchive,
   ArrowRight,
-  Smartphone,
+  LogOut,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/use-auth";
+import { supabase } from "@/lib/supabase";
 
-const mockProjects = [
-  {
-    id: "1",
-    name: "E-Commerce Dashboard",
-    source: "github",
-    status: "completed",
-    updatedAt: "2 hours ago",
-  },
-  {
-    id: "2",
-    name: "Portfolio Site",
-    source: "url",
-    status: "converting",
-    updatedAt: "5 hours ago",
-  },
-  {
-    id: "3",
-    name: "Task Manager App",
-    source: "zip",
-    status: "analyzing",
-    updatedAt: "1 day ago",
-  },
-];
+interface Project {
+  id: string;
+  name: string;
+  source_type: string;
+  status: string;
+  updated_at: string;
+}
 
-const stats = [
-  { label: "Projects", value: "3", icon: Folder },
-  { label: "Conversions", value: "12", icon: Smartphone },
-  { label: "Credits Left", value: "84", icon: CreditCard },
-  { label: "AI Queries", value: "47", icon: BarChart3 },
-];
+interface Stats {
+  projects: number;
+  conversions: number;
+  credits: number;
+  aiQueries: number;
+}
 
 function statusBadge(status: string) {
   const map: Record<string, { bg: string; text: string; label: string }> = {
-    completed: {
-      bg: "bg-emerald-500/10",
-      text: "text-emerald-400",
-      label: "Completed",
-    },
-    converting: {
-      bg: "bg-amber-500/10",
-      text: "text-amber-400",
-      label: "Converting",
-    },
-    analyzing: {
-      bg: "bg-violet-500/10",
-      text: "text-violet-400",
-      label: "Analyzing",
-    },
+    completed: { bg: "bg-emerald-500/10", text: "text-emerald-400", label: "Completed" },
+    converting: { bg: "bg-amber-500/10", text: "text-amber-400", label: "Converting" },
+    analyzing: { bg: "bg-violet-500/10", text: "text-violet-400", label: "Analyzing" },
+    analyzed: { bg: "bg-blue-500/10", text: "text-blue-400", label: "Analyzed" },
+    improving: { bg: "bg-cyan-500/10", text: "text-cyan-400", label: "Improving" },
+    pending: { bg: "bg-zinc-500/10", text: "text-zinc-400", label: "Pending" },
+    failed: { bg: "bg-red-500/10", text: "text-red-400", label: "Failed" },
   };
-  const s = map[status] ?? map.analyzing;
+  const s = map[status] ?? map.pending;
   return (
     <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-medium", s.bg, s.text)}>
       {s.label}
@@ -85,8 +62,61 @@ function sourceIcon(source: string) {
   }
 }
 
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
 export default function Dashboard() {
-  const [showNewProject, setShowNewProject] = useState(false);
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [stats, setStats] = useState<Stats>({ projects: 0, conversions: 0, credits: 0, aiQueries: 0 });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [projectsRes, creditsRes, jobsRes] = await Promise.all([
+          supabase.from("projects").select("*").order("updated_at", { ascending: false }),
+          supabase.from("credits").select("balance").single(),
+          supabase.from("conversion_jobs").select("id"),
+        ]);
+
+        const projectList = projectsRes.data ?? [];
+        setProjects(projectList);
+
+        setStats({
+          projects: projectList.length,
+          conversions: jobsRes.data?.length ?? 0,
+          credits: creditsRes.data?.balance ?? 0,
+          aiQueries: 0,
+        });
+      } catch {
+        // silent
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/");
+  };
+
+  const statCards = [
+    { label: "Projects", value: stats.projects, icon: Folder },
+    { label: "Conversions", value: stats.conversions, icon: Smartphone },
+    { label: "Credits", value: stats.credits, icon: CreditCard },
+    { label: "AI Queries", value: stats.aiQueries, icon: BarChart3 },
+  ];
 
   return (
     <div className="min-h-screen pt-20">
@@ -95,24 +125,25 @@ export default function Dashboard() {
           <div>
             <h1 className="text-2xl font-bold">Dashboard</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Manage your web-to-mobile conversions
+              {user?.email}
             </p>
           </div>
-          <Button
-            className="gap-2 bg-primary hover:bg-primary/90"
-            onClick={() => setShowNewProject(!showNewProject)}
-          >
-            <Plus className="h-4 w-4" />
-            New Project
-          </Button>
+          <div className="flex items-center gap-3">
+            <Link to="/new-project">
+              <Button className="gap-2 bg-primary hover:bg-primary/90">
+                <Plus className="h-4 w-4" />
+                New Project
+              </Button>
+            </Link>
+            <Button variant="ghost" size="icon" onClick={handleSignOut} title="Sign out">
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
         <div className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
-          {stats.map((stat) => (
-            <div
-              key={stat.label}
-              className="rounded-xl border border-white/5 bg-card p-5"
-            >
+          {statCards.map((stat) => (
+            <div key={stat.label} className="rounded-xl border border-white/5 bg-card p-5">
               <div className="flex items-center gap-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/10">
                   <stat.icon className="h-4 w-4 text-violet-400" />
@@ -126,77 +157,59 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {showNewProject && (
-          <div className="mt-8 rounded-2xl border border-violet-500/20 bg-card p-6">
-            <h2 className="text-lg font-semibold">Start a New Conversion</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Choose how you want to import your web application
-            </p>
-            <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-              {[
-                {
-                  icon: Github,
-                  title: "GitHub Repository",
-                  desc: "Connect and import directly",
-                },
-                {
-                  icon: FileArchive,
-                  title: "Upload ZIP",
-                  desc: "Drag and drop your project",
-                },
-                {
-                  icon: Globe,
-                  title: "Website URL",
-                  desc: "Paste a live website link",
-                },
-              ].map((method) => (
-                <button
-                  key={method.title}
-                  className="flex flex-col items-center rounded-xl border border-white/5 bg-muted/50 p-6 text-center transition-all hover:border-violet-500/20 hover:bg-muted"
-                >
-                  <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-violet-500/10">
-                    <method.icon className="h-5 w-5 text-violet-400" />
-                  </div>
-                  <h3 className="font-medium">{method.title}</h3>
-                  <p className="mt-1 text-xs text-muted-foreground">{method.desc}</p>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
         <div className="mt-8">
-          <h2 className="text-lg font-semibold">Recent Projects</h2>
-          <div className="mt-4 space-y-3">
-            {mockProjects.map((project) => (
-              <div
-                key={project.id}
-                className="flex items-center justify-between rounded-xl border border-white/5 bg-card p-5 transition-all hover:border-violet-500/20"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-                    {sourceIcon(project.source)}
-                  </div>
-                  <div>
-                    <h3 className="font-medium">{project.name}</h3>
-                    <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {project.updatedAt}
-                      </span>
+          <h2 className="text-lg font-semibold">Your Projects</h2>
+
+          {loading ? (
+            <div className="mt-8 flex justify-center">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
+            </div>
+          ) : projects.length === 0 ? (
+            <div className="mt-6 rounded-2xl border border-dashed border-white/10 p-12 text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-500/10">
+                <Folder className="h-6 w-6 text-violet-400" />
+              </div>
+              <h3 className="mt-4 font-semibold">No projects yet</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Create your first project to start converting a web app to mobile.
+              </p>
+              <Link to="/new-project" className="mt-6 inline-block">
+                <Button className="gap-2 bg-primary hover:bg-primary/90">
+                  <Plus className="h-4 w-4" />
+                  New Project
+                </Button>
+              </Link>
+            </div>
+          ) : (
+            <div className="mt-4 space-y-3">
+              {projects.map((project) => (
+                <Link
+                  key={project.id}
+                  to={`/project/${project.id}`}
+                  className="flex items-center justify-between rounded-xl border border-white/5 bg-card p-5 transition-all hover:border-violet-500/20"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                      {sourceIcon(project.source_type)}
+                    </div>
+                    <div>
+                      <h3 className="font-medium">{project.name}</h3>
+                      <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {timeAgo(project.updated_at)}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-4">
-                  {statusBadge(project.status)}
-                  <Button variant="ghost" size="sm" className="gap-1 text-xs">
-                    Open
-                    <ArrowRight className="h-3 w-3" />
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
+                  <div className="flex items-center gap-4">
+                    {statusBadge(project.status)}
+                    <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
