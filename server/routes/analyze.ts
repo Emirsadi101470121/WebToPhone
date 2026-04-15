@@ -1,4 +1,5 @@
 import { RequestHandler } from "express";
+import { deductCredits } from "./credits";
 
 const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY;
 const MODEL = "claude-3-5-sonnet-20241022";
@@ -34,11 +35,19 @@ async function callClaude(systemPrompt: string, userPrompt: string): Promise<str
 
 export const handleAnalyze: RequestHandler = async (req, res) => {
   try {
-    const { projectId, sourceType, sourceUrl } = req.body;
+    const { projectId, sourceType, sourceUrl, userId } = req.body;
 
     if (!projectId || !sourceType) {
       res.status(400).json({ error: "Missing required fields" });
       return;
+    }
+
+    if (userId) {
+      const creditResult = await deductCredits(userId, "analyze", projectId);
+      if (!creditResult.success) {
+        res.status(402).json({ error: creditResult.error, creditsRemaining: creditResult.remaining });
+        return;
+      }
     }
 
     if (!CLAUDE_API_KEY) {
@@ -108,11 +117,19 @@ Return JSON:
 
 export const handleReimagine: RequestHandler = async (req, res) => {
   try {
-    const { projectId, analysis, preferences, appDescription } = req.body;
+    const { projectId, analysis, preferences, appDescription, userId } = req.body;
 
     if (!projectId) {
       res.status(400).json({ error: "Missing project ID" });
       return;
+    }
+
+    if (userId) {
+      const creditResult = await deductCredits(userId, "reimagine", projectId);
+      if (!creditResult.success) {
+        res.status(402).json({ error: creditResult.error, creditsRemaining: creditResult.remaining });
+        return;
+      }
     }
 
     if (!CLAUDE_API_KEY) {
@@ -267,11 +284,19 @@ Return JSON:
 
 export const handleConvert: RequestHandler = async (req, res) => {
   try {
-    const { projectId, selectedDesigns, preferences } = req.body;
+    const { projectId, selectedDesigns, preferences, userId } = req.body;
 
     if (!projectId) {
       res.status(400).json({ error: "Missing project ID" });
       return;
+    }
+
+    if (userId) {
+      const creditResult = await deductCredits(userId, "convert", projectId);
+      if (!creditResult.success) {
+        res.status(402).json({ error: creditResult.error, creditsRemaining: creditResult.remaining });
+        return;
+      }
     }
 
     if (!CLAUDE_API_KEY) {

@@ -7,6 +7,8 @@ import ComponentTree, { type TreeNode } from "@/components/builder/ComponentTree
 import PropertiesPanel from "@/components/builder/PropertiesPanel";
 import MobilePreview from "@/components/builder/MobilePreview";
 import { useAuth } from "@/hooks/use-auth";
+import { exportProject } from "@/lib/export";
+import { toast } from "sonner";
 
 const defaultTree: TreeNode[] = [
   {
@@ -152,26 +154,14 @@ export default function Builder() {
     if (!id || !user) return;
     setExporting(true);
     try {
-      const res = await fetch("/api/export", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId: id, userId: user.id }),
-      });
-      const data = await res.json();
-      if (data.files) {
-        const blob = new Blob(
-          [JSON.stringify(data.files, null, 2)],
-          { type: "application/json" }
-        );
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `${data.projectName || "morphic-export"}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
+      const success = await exportProject(id, user.id, "morphic-app");
+      if (success) {
+        toast.success("Project exported as ZIP");
+      } else {
+        toast.error("Export failed");
       }
     } catch {
-      // silent
+      toast.error("Export failed");
     } finally {
       setExporting(false);
     }

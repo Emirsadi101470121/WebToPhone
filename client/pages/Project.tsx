@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
+import { toast } from "sonner";
 import ValidationStep from "@/components/pipeline/ValidationStep";
 import DesignInterviewStep from "@/components/pipeline/DesignInterviewStep";
 import DesignSelectionStep from "@/components/pipeline/DesignSelectionStep";
@@ -61,6 +62,15 @@ export default function Project() {
   const [selectedDesigns, setSelectedDesigns] = useState<any>(null);
   const [qaReport, setQaReport] = useState<any>(null);
 
+  const savePipelineState = async (stage: string, stateData: any) => {
+    if (!id) return;
+    try {
+      await supabase.from("projects").update({
+        pipeline_state: { stage, ...stateData },
+      }).eq("id", id);
+    } catch {}
+  };
+
   useEffect(() => {
     const load = async () => {
       if (!id) return;
@@ -68,7 +78,18 @@ export default function Project() {
         const { data } = await supabase.from("projects").select("*").eq("id", id).single();
         if (data) {
           setProject(data);
-          if (data.status === "completed") setCurrentStage("qa-done");
+          if (data.status === "completed") {
+            setCurrentStage("qa-done");
+          } else if (data.pipeline_state?.stage) {
+            const ps = data.pipeline_state;
+            setCurrentStage(ps.stage);
+            if (ps.analysis) setAnalysis(ps.analysis);
+            if (ps.validatedData) setValidatedData(ps.validatedData);
+            if (ps.preferences) setPreferences(ps.preferences);
+            if (ps.designs) setDesigns(ps.designs);
+            if (ps.selectedDesigns) setSelectedDesigns(ps.selectedDesigns);
+            if (ps.qaReport) setQaReport(ps.qaReport);
+          }
         }
       } catch {} finally {
         setLoading(false);
@@ -94,14 +115,24 @@ export default function Project() {
           projectId: project.id,
           sourceType: project.source_type,
           sourceUrl: project.source_url,
+          userId: user.id,
         }),
       });
+
+      if (response.status === 402) {
+        const err = await response.json();
+        toast.error(err.error || "Not enough credits");
+        setCurrentStage(null);
+        return;
+      }
 
       if (response.ok) {
         const data = await response.json();
         setAnalysis(data.analysis);
+        toast.success("Analysis complete - 5 credits used");
         await supabase.from("projects").update({ status: "analyzed" }).eq("id", project.id);
         setCurrentStage("validate");
+        await savePipelineState("validate", { analysis: data.analysis });
       }
     } catch {} finally {
       setStageLoading(false);
@@ -111,6 +142,7 @@ export default function Project() {
   const handleValidationConfirm = async (data: any) => {
     setValidatedData(data);
     setCurrentStage("interview");
+    await savePipelineState("interview", { analysis, validatedData: data });
 
     try {
       await supabase.from("user_preferences").upsert({
@@ -144,13 +176,24 @@ export default function Project() {
           analysis,
           preferences: prefs,
           appDescription: validatedData?.appDescription,
+          userId: user!.id,
         }),
       });
+
+      if (response.status === 402) {
+        const err = await response.json();
+        toast.error(err.error || "Not enough credits");
+        setCurrentStage("interview");
+        setStageLoading(false);
+        return;
+      }
 
       if (response.ok) {
         const data = await response.json();
         setDesigns(data.designs ?? []);
+        toast.success("Mobile UX reimagined - 10 credits used");
         setCurrentStage("select");
+        await savePipelineState("select", { analysis, validatedData, preferences: prefs, designs: data.designs ?? [] });
       }
     } catch {} finally {
       setStageLoading(false);
@@ -160,6 +203,7 @@ export default function Project() {
   const handleDesignSelection = async (selections: any) => {
     setSelectedDesigns(selections);
     setCurrentStage("builder");
+    await savePipelineState("builder", { analysis, validatedData, preferences, designs, selectedDesigns: selections });
 
     try {
       const componentTree = Object.entries(selections).map(([pageName, design]: any) => ({
@@ -191,8 +235,17 @@ export default function Project() {
           projectId: project!.id,
           selectedDesigns,
           preferences,
+          userId: user!.id,
         }),
       });
+
+      if (response.status === 402) {
+        const err = await response.json();
+        toast.error(err.error || "Not enough credits");
+        setCurrentStage("builder");
+        setStageLoading(false);
+        return;
+      }
 
       if (response.ok) {
         const data = await response.json();
