@@ -20,9 +20,41 @@ import {
 export function createServer() {
   const app = express();
 
-  app.use(cors());
-  app.use(express.json({ limit: "50mb" }));
+  // CORS - restrict to known origins in production
+  const allowedOrigins = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(",")
+    : undefined; // undefined = allow all in dev
+
+  app.use(cors({
+    origin: allowedOrigins ?? true,
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  }));
+
+  app.use(express.json({ limit: "10mb" }));
   app.use(express.urlencoded({ extended: true }));
+
+  // Security headers
+  app.use((_req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("X-XSS-Protection", "1; mode=block");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader(
+      "Content-Security-Policy",
+      [
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data: https:",
+        "font-src 'self' data:",
+        "connect-src 'self' https://*.supabase.co https://api.anthropic.com https://api.github.com",
+        "frame-ancestors 'none'",
+      ].join("; ")
+    );
+    next();
+  });
 
   // Rate limiters
   const aiLimiter = rateLimit({
@@ -31,6 +63,12 @@ export function createServer() {
     message: { error: "Too many AI requests. Please wait a moment." },
     standardHeaders: true,
     legacyHeaders: false,
+    validate: false,
+    keyGenerator: (req: express.Request): string => {
+      const userId = req.body?.userId || req.query?.userId;
+      if (userId && typeof userId === "string") return `user:${userId}`;
+      return req.ip || "unknown";
+    },
   });
 
   const generalLimiter = rateLimit({
@@ -38,6 +76,7 @@ export function createServer() {
     max: 60,
     standardHeaders: true,
     legacyHeaders: false,
+    validate: false,
   });
 
   app.use("/api/", generalLimiter);

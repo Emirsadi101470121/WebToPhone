@@ -25,6 +25,7 @@ import ValidationStep from "@/components/pipeline/ValidationStep";
 import DesignInterviewStep from "@/components/pipeline/DesignInterviewStep";
 import DesignSelectionStep from "@/components/pipeline/DesignSelectionStep";
 import { fetchWithRetry } from "@/lib/retry";
+import ModelSelector, { type ModelTier } from "@/components/ModelSelector";
 
 interface ProjectData {
   id: string;
@@ -62,6 +63,7 @@ export default function Project() {
   const [designs, setDesigns] = useState<any[]>([]);
   const [selectedDesigns, setSelectedDesigns] = useState<any>(null);
   const [qaReport, setQaReport] = useState<any>(null);
+  const [modelTier, setModelTier] = useState<ModelTier>("sonnet");
 
   const savePipelineState = async (stage: string, stateData: any) => {
     if (!id) return;
@@ -117,6 +119,7 @@ export default function Project() {
           sourceType: project.source_type,
           sourceUrl: project.source_url,
           userId: user.id,
+          modelTier,
         }),
       });
 
@@ -130,7 +133,8 @@ export default function Project() {
       if (response.ok) {
         const data = await response.json();
         setAnalysis(data.analysis);
-        toast.success("Analysis complete - 5 credits used");
+        const cost = modelTier === "haiku" ? 3 : modelTier === "opus" ? 15 : 5;
+        toast.success(`Analysis complete - ${cost} credits used (${modelTier})`);
         await supabase.from("projects").update({ status: "analyzed" }).eq("id", project.id);
         setCurrentStage("validate");
         await savePipelineState("validate", { analysis: data.analysis });
@@ -178,6 +182,7 @@ export default function Project() {
           preferences: prefs,
           appDescription: validatedData?.appDescription,
           userId: user!.id,
+          modelTier,
         }),
       });
 
@@ -192,7 +197,8 @@ export default function Project() {
       if (response.ok) {
         const data = await response.json();
         setDesigns(data.designs ?? []);
-        toast.success("Mobile UX reimagined - 10 credits used");
+        const cost = modelTier === "haiku" ? 5 : modelTier === "opus" ? 30 : 10;
+        toast.success(`Mobile UX reimagined - ${cost} credits used (${modelTier})`);
         setCurrentStage("select");
         await savePipelineState("select", { analysis, validatedData, preferences: prefs, designs: data.designs ?? [] });
       }
@@ -237,6 +243,7 @@ export default function Project() {
           selectedDesigns,
           preferences,
           userId: user!.id,
+          modelTier,
         }),
       });
 
@@ -354,6 +361,15 @@ export default function Project() {
               <p className="mt-2 text-sm text-muted-foreground">
                 AI will analyze your codebase, then guide you through designing a mobile-first experience before building it.
               </p>
+
+              <div className="mx-auto mt-6 max-w-xs">
+                <p className="mb-2 text-xs font-medium text-muted-foreground">AI Model</p>
+                <ModelSelector selected={modelTier} onChange={setModelTier} />
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Credits per stage: Analyze {modelTier === "haiku" ? 3 : modelTier === "opus" ? 15 : 5} / Reimagine {modelTier === "haiku" ? 5 : modelTier === "opus" ? 30 : 10} / Convert {modelTier === "haiku" ? 8 : modelTier === "opus" ? 45 : 15}
+                </p>
+              </div>
+
               <Button onClick={startAnalysis} disabled={stageLoading} className="mt-6 gap-2 bg-primary hover:bg-primary/90">
                 {stageLoading ? <><Loader2 className="h-4 w-4 animate-spin" />Analyzing...</> : <><Play className="h-4 w-4" />Start AI Analysis</>}
               </Button>

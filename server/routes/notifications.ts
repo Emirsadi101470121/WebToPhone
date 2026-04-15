@@ -1,5 +1,6 @@
 import { RequestHandler } from "express";
 import { createClient } from "@supabase/supabase-js";
+import { isAllowedWebhookUrl, sanitizeString } from "../lib/sanitize";
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL || "",
@@ -18,7 +19,7 @@ export async function sendWebhookNotification(
       .eq("user_id", userId)
       .single();
 
-    if (!settings?.webhook_url) return;
+    if (!settings?.webhook_url || !isAllowedWebhookUrl(settings.webhook_url)) return;
 
     await fetch(settings.webhook_url, {
       method: "POST",
@@ -46,8 +47,15 @@ export const handleGetNotificationSettings: RequestHandler = async (req, res) =>
 };
 
 export const handleUpdateNotificationSettings: RequestHandler = async (req, res) => {
-  const { userId, webhookUrl, emailNotifications } = req.body;
+  const userId = sanitizeString(req.body.userId);
+  const webhookUrl = req.body.webhookUrl ? String(req.body.webhookUrl).trim() : null;
+  const emailNotifications = req.body.emailNotifications;
   if (!userId) { res.status(400).json({ error: "Missing userId" }); return; }
+
+  if (webhookUrl && !isAllowedWebhookUrl(webhookUrl)) {
+    res.status(400).json({ error: "Invalid webhook URL. Must be HTTPS and not a private/internal address." });
+    return;
+  }
 
   const { error } = await supabase
     .from("notification_settings")

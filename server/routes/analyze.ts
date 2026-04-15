@@ -1,13 +1,15 @@
 import { RequestHandler } from "express";
-import { deductCredits } from "./credits";
+import { deductCredits, getModelId, type ModelTier } from "./credits";
+import { sanitizeString, sanitizeUrl, isValidUUID } from "../lib/sanitize";
 
 const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY;
-const MODEL = "claude-3-5-sonnet-20241022";
 
-async function callClaude(systemPrompt: string, userPrompt: string): Promise<string> {
+async function callClaude(systemPrompt: string, userPrompt: string, modelTier: ModelTier = "sonnet"): Promise<string> {
   if (!CLAUDE_API_KEY) {
     throw new Error("CLAUDE_API_KEY not configured");
   }
+
+  const modelId = getModelId(modelTier);
 
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -17,7 +19,7 @@ async function callClaude(systemPrompt: string, userPrompt: string): Promise<str
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: MODEL,
+      model: modelId,
       max_tokens: 4096,
       system: systemPrompt,
       messages: [{ role: "user", content: userPrompt }],
@@ -33,9 +35,26 @@ async function callClaude(systemPrompt: string, userPrompt: string): Promise<str
   return data.content?.[0]?.text ?? "";
 }
 
+// Default model per stage (can be overridden by user)
+const DEFAULT_MODELS: Record<string, ModelTier> = {
+  analyze: "haiku",
+  reimagine: "sonnet",
+  convert: "sonnet",
+};
+
+function resolveModel(body: any, stage: string): ModelTier {
+  const tier = body.modelTier as string | undefined;
+  if (tier === "haiku" || tier === "sonnet" || tier === "opus") return tier;
+  return DEFAULT_MODELS[stage] ?? "sonnet";
+}
+
 export const handleAnalyze: RequestHandler = async (req, res) => {
   try {
-    const { projectId, sourceType, sourceUrl, userId } = req.body;
+    const projectId = sanitizeString(req.body.projectId);
+    const sourceType = sanitizeString(req.body.sourceType);
+    const sourceUrl = req.body.sourceUrl ? sanitizeUrl(req.body.sourceUrl) : "";
+    const userId = req.body.userId ? sanitizeString(req.body.userId) : undefined;
+    const modelTier = resolveModel(req.body, "analyze");
 
     if (!projectId || !sourceType) {
       res.status(400).json({ error: "Missing required fields" });
@@ -43,7 +62,7 @@ export const handleAnalyze: RequestHandler = async (req, res) => {
     }
 
     if (userId) {
-      const creditResult = await deductCredits(userId, "analyze", projectId);
+      const creditResult = await deductCredits(userId, "analyze", projectId, modelTier);
       if (!creditResult.success) {
         res.status(402).json({ error: creditResult.error, creditsRemaining: creditResult.remaining });
         return;
@@ -53,6 +72,7 @@ export const handleAnalyze: RequestHandler = async (req, res) => {
     if (!CLAUDE_API_KEY) {
       res.json({
         success: true,
+        modelUsed: modelTier,
         analysis: {
           pages: [
             { name: "Login", type: "auth", description: "User authentication with email/password" },
@@ -100,7 +120,7 @@ Return JSON:
   }
 }`;
 
-    const result = await callClaude(systemPrompt, userPrompt);
+    const result = await callClaude(systemPrompt, userPrompt, modelTier);
     let parsed;
     try {
       parsed = JSON.parse(result);
@@ -108,7 +128,7 @@ Return JSON:
       parsed = { analysis: { pages: [], features: [], userFlows: [], components: 0, routes: 0, apis: 0 } };
     }
 
-    res.json({ success: true, ...parsed });
+    res.json({ success: true, modelUsed: modelTier, ...parsed });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Analysis failed";
     res.status(500).json({ error: message });
@@ -117,7 +137,12 @@ Return JSON:
 
 export const handleReimagine: RequestHandler = async (req, res) => {
   try {
-    const { projectId, analysis, preferences, appDescription, userId } = req.body;
+    const projectId = sanitizeString(req.body.projectId);
+    const analysis = req.body.analysis;
+    const preferences = req.body.preferences;
+    const appDescription = sanitizeString(req.body.appDescription);
+    const userId = req.body.userId ? sanitizeString(req.body.userId) : undefined;
+    const modelTier = resolveModel(req.body, "reimagine");
 
     if (!projectId) {
       res.status(400).json({ error: "Missing project ID" });
@@ -125,7 +150,7 @@ export const handleReimagine: RequestHandler = async (req, res) => {
     }
 
     if (userId) {
-      const creditResult = await deductCredits(userId, "reimagine", projectId);
+      const creditResult = await deductCredits(userId, "reimagine", projectId, modelTier);
       if (!creditResult.success) {
         res.status(402).json({ error: creditResult.error, creditsRemaining: creditResult.remaining });
         return;
@@ -218,7 +243,7 @@ export const handleReimagine: RequestHandler = async (req, res) => {
         ],
       }));
 
-      res.json({ success: true, designs });
+      res.json({ success: true, modelUsed: modelTier, designs });
       return;
     }
 
@@ -267,7 +292,7 @@ Return JSON:
   ]
 }`;
 
-    const result = await callClaude(systemPrompt, userPrompt);
+    const result = await callClaude(systemPrompt, userPrompt, modelTier);
     let parsed;
     try {
       parsed = JSON.parse(result);
@@ -275,7 +300,7 @@ Return JSON:
       parsed = { designs: [] };
     }
 
-    res.json({ success: true, ...parsed });
+    res.json({ success: true, modelUsed: modelTier, ...parsed });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Reimagination failed";
     res.status(500).json({ error: message });
@@ -284,7 +309,11 @@ Return JSON:
 
 export const handleConvert: RequestHandler = async (req, res) => {
   try {
-    const { projectId, selectedDesigns, preferences, userId } = req.body;
+    const projectId = sanitizeString(req.body.projectId);
+    const selectedDesigns = req.body.selectedDesigns;
+    const preferences = req.body.preferences;
+    const userId = req.body.userId ? sanitizeString(req.body.userId) : undefined;
+    const modelTier = resolveModel(req.body, "convert");
 
     if (!projectId) {
       res.status(400).json({ error: "Missing project ID" });
@@ -292,7 +321,7 @@ export const handleConvert: RequestHandler = async (req, res) => {
     }
 
     if (userId) {
-      const creditResult = await deductCredits(userId, "convert", projectId);
+      const creditResult = await deductCredits(userId, "convert", projectId, modelTier);
       if (!creditResult.success) {
         res.status(402).json({ error: creditResult.error, creditsRemaining: creditResult.remaining });
         return;
@@ -302,6 +331,7 @@ export const handleConvert: RequestHandler = async (req, res) => {
     if (!CLAUDE_API_KEY) {
       res.json({
         success: true,
+        modelUsed: modelTier,
         files: [
           { path: "App.tsx", type: "component" },
           { path: "screens/HomeScreen.tsx", type: "screen" },
@@ -334,7 +364,7 @@ Return JSON:
   }
 }`;
 
-    const result = await callClaude(systemPrompt, userPrompt);
+    const result = await callClaude(systemPrompt, userPrompt, modelTier);
     let parsed;
     try {
       parsed = JSON.parse(result);
@@ -342,7 +372,7 @@ Return JSON:
       parsed = { files: [], qa: { uxIssues: [], securityNotes: [], accessibilityNotes: [] } };
     }
 
-    res.json({ success: true, ...parsed });
+    res.json({ success: true, modelUsed: modelTier, ...parsed });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Conversion failed";
     res.status(500).json({ error: message });
