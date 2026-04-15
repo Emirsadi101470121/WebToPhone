@@ -3,18 +3,26 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   ArrowLeft,
   Search,
-  Paintbrush,
+  ClipboardCheck,
+  MessageSquare,
+  Sparkles,
+  Eye,
+  MousePointer,
+  Wrench,
   RefreshCw,
+  ShieldCheck,
+  Play,
+  Loader2,
   CheckCircle2,
   Circle,
-  Loader2,
-  Play,
-  MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
+import ValidationStep from "@/components/pipeline/ValidationStep";
+import DesignInterviewStep from "@/components/pipeline/DesignInterviewStep";
+import DesignSelectionStep from "@/components/pipeline/DesignSelectionStep";
 
 interface ProjectData {
   id: string;
@@ -23,22 +31,18 @@ interface ProjectData {
   source_type: string;
   source_url: string | null;
   status: string;
-  created_at: string;
-}
-
-interface AiQuestion {
-  id: string;
-  question: string;
-  question_type: string;
-  options: string[];
-  answer: string | null;
 }
 
 const stages = [
-  { key: "analyzing", label: "Analyze", icon: Search, desc: "AI scans your codebase architecture" },
-  { key: "designing", label: "Design", icon: Paintbrush, desc: "AI suggests UI/UX improvements" },
-  { key: "converting", label: "Convert", icon: RefreshCw, desc: "Web components mapped to React Native" },
-  { key: "validating", label: "Validate", icon: CheckCircle2, desc: "Output tested and verified" },
+  { key: "analyze", label: "Analyze", icon: Search },
+  { key: "validate", label: "Validate", icon: ClipboardCheck },
+  { key: "interview", label: "Interview", icon: MessageSquare },
+  { key: "reimagine", label: "Reimagine", icon: Sparkles },
+  { key: "suggest", label: "Suggest", icon: Eye },
+  { key: "select", label: "Select", icon: MousePointer },
+  { key: "builder", label: "Builder", icon: Wrench },
+  { key: "convert", label: "Convert", icon: RefreshCw },
+  { key: "qa", label: "QA", icon: ShieldCheck },
 ];
 
 export default function Project() {
@@ -48,45 +52,40 @@ export default function Project() {
   const [project, setProject] = useState<ProjectData | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentStage, setCurrentStage] = useState<string | null>(null);
-  const [questions, setQuestions] = useState<AiQuestion[]>([]);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [analysisRunning, setAnalysisRunning] = useState(false);
-  const [analysisComplete, setAnalysisComplete] = useState(false);
+  const [stageLoading, setStageLoading] = useState(false);
+
+  const [analysis, setAnalysis] = useState<any>(null);
+  const [validatedData, setValidatedData] = useState<any>(null);
+  const [preferences, setPreferences] = useState<any>(null);
+  const [designs, setDesigns] = useState<any[]>([]);
+  const [selectedDesigns, setSelectedDesigns] = useState<any>(null);
+  const [qaReport, setQaReport] = useState<any>(null);
 
   useEffect(() => {
     const load = async () => {
       if (!id) return;
       try {
-        const { data } = await supabase
-          .from("projects")
-          .select("*")
-          .eq("id", id)
-          .single();
+        const { data } = await supabase.from("projects").select("*").eq("id", id).single();
         if (data) {
           setProject(data);
-          if (data.status !== "pending") {
-            setAnalysisComplete(true);
-          }
+          if (data.status === "completed") setCurrentStage("qa-done");
         }
-      } catch {
-        // silent
-      } finally {
+      } catch {} finally {
         setLoading(false);
       }
     };
     load();
   }, [id]);
 
+  const stageIndex = stages.findIndex((s) => s.key === currentStage);
+
   const startAnalysis = async () => {
     if (!project || !user) return;
-    setAnalysisRunning(true);
-    setCurrentStage("analyzing");
+    setStageLoading(true);
+    setCurrentStage("analyze");
 
     try {
-      await supabase
-        .from("projects")
-        .update({ status: "analyzing" })
-        .eq("id", project.id);
+      await supabase.from("projects").update({ status: "analyzing" }).eq("id", project.id);
 
       const response = await fetch("/api/analyze", {
         method: "POST",
@@ -100,69 +99,113 @@ export default function Project() {
 
       if (response.ok) {
         const data = await response.json();
-        if (data.questions) {
-          setQuestions(data.questions);
-        }
-        setCurrentStage("designing");
-        setAnalysisComplete(true);
-        await supabase
-          .from("projects")
-          .update({ status: "analyzed" })
-          .eq("id", project.id);
-      } else {
-        setCurrentStage(null);
+        setAnalysis(data.analysis);
+        await supabase.from("projects").update({ status: "analyzed" }).eq("id", project.id);
+        setCurrentStage("validate");
       }
-    } catch {
-      setCurrentStage(null);
-    } finally {
-      setAnalysisRunning(false);
+    } catch {} finally {
+      setStageLoading(false);
     }
   };
 
-  const handleAnswerChange = (questionId: string, answer: string) => {
-    setAnswers((prev) => ({ ...prev, [questionId]: answer }));
-  };
-
-  const submitPreferences = async () => {
-    if (!project || !user) return;
-    setCurrentStage("converting");
+  const handleValidationConfirm = async (data: any) => {
+    setValidatedData(data);
+    setCurrentStage("interview");
 
     try {
-      for (const q of questions) {
-        if (answers[q.id]) {
-          await supabase
-            .from("ai_questions")
-            .update({ answer: answers[q.id], answered_at: new Date().toISOString() })
-            .eq("id", q.id);
-        }
-      }
+      await supabase.from("user_preferences").upsert({
+        project_id: project!.id,
+        user_id: user!.id,
+        custom_notes: data.appDescription,
+      }, { onConflict: "project_id" });
+    } catch {}
+  };
 
-      await supabase
-        .from("projects")
-        .update({ status: "converting" })
-        .eq("id", project.id);
+  const handleDesignInterviewSubmit = async (prefs: any) => {
+    setPreferences(prefs);
+    setCurrentStage("reimagine");
+    setStageLoading(true);
 
-      const response = await fetch("/api/convert", {
+    try {
+      await supabase.from("user_preferences").upsert({
+        project_id: project!.id,
+        user_id: user!.id,
+        design_style: prefs.style,
+        target_audience: prefs.targetAudience,
+        theme: prefs.theme === "dark" ? "dark" : "light",
+        ux_complexity: prefs.uxPriority === "power" ? "advanced" : prefs.uxPriority === "simplicity" ? "simple" : "moderate",
+      }, { onConflict: "project_id" });
+
+      const response = await fetch("/api/reimagine", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          projectId: project.id,
-          preferences: answers,
+          projectId: project!.id,
+          analysis,
+          preferences: prefs,
+          appDescription: validatedData?.appDescription,
         }),
       });
 
       if (response.ok) {
-        setCurrentStage("validating");
-        setTimeout(() => {
-          setCurrentStage("done");
-          supabase
-            .from("projects")
-            .update({ status: "completed" })
-            .eq("id", project.id);
-        }, 2000);
+        const data = await response.json();
+        setDesigns(data.designs ?? []);
+        setCurrentStage("select");
       }
-    } catch {
-      // silent
+    } catch {} finally {
+      setStageLoading(false);
+    }
+  };
+
+  const handleDesignSelection = async (selections: any) => {
+    setSelectedDesigns(selections);
+    setCurrentStage("builder");
+
+    try {
+      const componentTree = Object.entries(selections).map(([pageName, design]: any) => ({
+        pageName,
+        designName: design.name,
+        layout: design.layout,
+      }));
+
+      await supabase.from("builder_sessions").insert({
+        project_id: project!.id,
+        user_id: user!.id,
+        component_tree: componentTree,
+        session_data: { preferences, validatedData },
+      });
+
+      await supabase.from("projects").update({ status: "converting" }).eq("id", project!.id);
+    } catch {}
+  };
+
+  const startConversion = async () => {
+    setCurrentStage("convert");
+    setStageLoading(true);
+
+    try {
+      const response = await fetch("/api/convert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId: project!.id,
+          selectedDesigns,
+          preferences,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setQaReport(data.qa ?? null);
+        setCurrentStage("qa");
+        setStageLoading(false);
+
+        await supabase.from("projects").update({ status: "completed" }).eq("id", project!.id);
+
+        setTimeout(() => setCurrentStage("qa-done"), 2000);
+      }
+    } catch {} finally {
+      setStageLoading(false);
     }
   };
 
@@ -178,14 +221,10 @@ export default function Project() {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center pt-16">
         <p className="text-muted-foreground">Project not found</p>
-        <Button variant="outline" className="mt-4" onClick={() => navigate("/dashboard")}>
-          Back to Dashboard
-        </Button>
+        <Button variant="outline" className="mt-4" onClick={() => navigate("/dashboard")}>Back to Dashboard</Button>
       </div>
     );
   }
-
-  const stageIndex = stages.findIndex((s) => s.key === currentStage);
 
   return (
     <div className="min-h-screen pt-20">
@@ -198,175 +237,179 @@ export default function Project() {
           Dashboard
         </button>
 
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">{project.name}</h1>
-            {project.description && (
-              <p className="mt-1 text-sm text-muted-foreground">{project.description}</p>
-            )}
-          </div>
-        </div>
+        <h1 className="text-2xl font-bold">{project.name}</h1>
+        {project.description && <p className="mt-1 text-sm text-muted-foreground">{project.description}</p>}
 
-        <div className="mt-8 grid grid-cols-4 gap-2">
+        <div className="mt-6 flex gap-1 overflow-x-auto pb-2">
           {stages.map((stage, i) => {
             const isActive = stage.key === currentStage;
-            const isDone = stageIndex > i || currentStage === "done";
+            const isDone = stageIndex > i || currentStage === "qa-done";
+            const Icon = stage.icon;
             return (
               <div
                 key={stage.key}
                 className={cn(
-                  "rounded-xl border p-4 transition-all",
-                  isActive ? "border-violet-500 bg-violet-500/10" :
-                  isDone ? "border-emerald-500/30 bg-emerald-500/5" :
-                  "border-white/5 bg-card"
+                  "flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-xs transition-all",
+                  isActive ? "border-violet-500 bg-violet-500/10 text-violet-300" :
+                  isDone ? "border-emerald-500/20 bg-emerald-500/5 text-emerald-400" :
+                  "border-white/5 text-muted-foreground/50"
                 )}
               >
-                <div className="flex items-center gap-2">
-                  {isDone ? (
-                    <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                  ) : isActive ? (
-                    <Loader2 className="h-4 w-4 animate-spin text-violet-400" />
-                  ) : (
-                    <Circle className="h-4 w-4 text-muted-foreground/40" />
-                  )}
-                  <span className={cn(
-                    "text-sm font-medium",
-                    isActive ? "text-violet-400" : isDone ? "text-emerald-400" : "text-muted-foreground"
-                  )}>
-                    {stage.label}
-                  </span>
-                </div>
-                <p className="mt-1.5 text-xs text-muted-foreground">{stage.desc}</p>
+                {isDone ? <CheckCircle2 className="h-3 w-3" /> :
+                 isActive && stageLoading ? <Loader2 className="h-3 w-3 animate-spin" /> :
+                 isActive ? <Icon className="h-3 w-3" /> :
+                 <Circle className="h-3 w-3" />}
+                {stage.label}
               </div>
             );
           })}
         </div>
 
-        {!currentStage && project.status === "pending" && (
-          <div className="mt-8 rounded-2xl border border-white/5 bg-card p-8 text-center">
-            <Search className="mx-auto h-10 w-10 text-violet-400" />
-            <h2 className="mt-4 text-lg font-semibold">Ready to Analyze</h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Start the AI pipeline to analyze your codebase, suggest improvements, and convert to React Native.
-            </p>
-            <Button
-              onClick={startAnalysis}
-              disabled={analysisRunning}
-              className="mt-6 gap-2 bg-primary hover:bg-primary/90"
-            >
-              {analysisRunning ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Analyzing...
-                </>
-              ) : (
-                <>
-                  <Play className="h-4 w-4" />
-                  Start AI Analysis
-                </>
-              )}
-            </Button>
-          </div>
-        )}
-
-        {currentStage === "designing" && questions.length > 0 && (
-          <div className="mt-8 space-y-6">
-            <div className="rounded-2xl border border-violet-500/20 bg-card p-6">
-              <div className="flex items-center gap-2">
-                <MessageSquare className="h-5 w-5 text-violet-400" />
-                <h2 className="text-lg font-semibold">AI Design Questions</h2>
-              </div>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Help our AI tailor the mobile experience to your needs
+        <div className="mt-8">
+          {!currentStage && project.status !== "completed" && (
+            <div className="rounded-2xl border border-white/5 bg-card p-8 text-center">
+              <Search className="mx-auto h-10 w-10 text-violet-400" />
+              <h2 className="mt-4 text-lg font-semibold">Ready to Analyze</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                AI will analyze your codebase, then guide you through designing a mobile-first experience before building it.
               </p>
-
-              <div className="mt-6 space-y-6">
-                {questions.map((q) => (
-                  <div key={q.id}>
-                    <label className="mb-2 block text-sm font-medium">{q.question}</label>
-                    {q.options.length > 0 ? (
-                      <div className="flex flex-wrap gap-2">
-                        {q.options.map((opt) => (
-                          <button
-                            key={opt}
-                            onClick={() => handleAnswerChange(q.id, opt)}
-                            className={cn(
-                              "rounded-lg border px-4 py-2 text-sm transition-all",
-                              answers[q.id] === opt
-                                ? "border-violet-500 bg-violet-500/10 text-violet-300"
-                                : "border-white/10 hover:border-violet-500/20"
-                            )}
-                          >
-                            {opt}
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <input
-                        type="text"
-                        value={answers[q.id] ?? ""}
-                        onChange={(e) => handleAnswerChange(q.id, e.target.value)}
-                        className="w-full rounded-lg border border-white/10 bg-muted/50 px-3 py-2.5 text-sm outline-none focus:border-violet-500"
-                      />
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              <Button onClick={submitPreferences} className="mt-6 gap-2 bg-primary hover:bg-primary/90">
-                Apply Preferences & Convert
-                <ArrowLeft className="h-4 w-4 rotate-180" />
+              <Button onClick={startAnalysis} disabled={stageLoading} className="mt-6 gap-2 bg-primary hover:bg-primary/90">
+                {stageLoading ? <><Loader2 className="h-4 w-4 animate-spin" />Analyzing...</> : <><Play className="h-4 w-4" />Start AI Analysis</>}
               </Button>
             </div>
-          </div>
-        )}
+          )}
 
-        {currentStage === "designing" && questions.length === 0 && (
-          <div className="mt-8 rounded-2xl border border-white/5 bg-card p-8 text-center">
-            <Paintbrush className="mx-auto h-10 w-10 text-violet-400" />
-            <h2 className="mt-4 text-lg font-semibold">Analysis Complete</h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              No additional preferences needed. Ready to convert.
-            </p>
-            <Button onClick={submitPreferences} className="mt-6 gap-2 bg-primary hover:bg-primary/90">
-              Start Conversion
-            </Button>
-          </div>
-        )}
-
-        {(currentStage === "converting" || currentStage === "validating") && (
-          <div className="mt-8 rounded-2xl border border-white/5 bg-card p-8 text-center">
-            <Loader2 className="mx-auto h-10 w-10 animate-spin text-violet-400" />
-            <h2 className="mt-4 text-lg font-semibold">
-              {currentStage === "converting" ? "Converting to React Native..." : "Validating Output..."}
-            </h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              This may take a few minutes depending on project size.
-            </p>
-          </div>
-        )}
-
-        {currentStage === "done" && (
-          <div className="mt-8 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-8 text-center">
-            <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-400" />
-            <h2 className="mt-4 text-lg font-semibold">Conversion Complete</h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Your React Native app is ready. Open the visual builder or export.
-            </p>
-            <div className="mt-6 flex justify-center gap-3">
-              <Link to={`/builder/${project.id}`}>
-                <Button className="gap-2 bg-primary hover:bg-primary/90">
-                  Open Visual Builder
-                </Button>
-              </Link>
-              <Link to={`/builder/${project.id}`}>
-                <Button variant="outline" className="gap-2">
-                  Export Project
-                </Button>
-              </Link>
+          {currentStage === "analyze" && stageLoading && (
+            <div className="rounded-2xl border border-white/5 bg-card p-8 text-center">
+              <Loader2 className="mx-auto h-10 w-10 animate-spin text-violet-400" />
+              <h2 className="mt-4 text-lg font-semibold">Analyzing Your App</h2>
+              <p className="mt-2 text-sm text-muted-foreground">AI is scanning pages, features, and user flows...</p>
             </div>
-          </div>
-        )}
+          )}
+
+          {currentStage === "validate" && analysis && (
+            <ValidationStep
+              pages={analysis.pages ?? []}
+              features={analysis.features ?? []}
+              userFlows={analysis.userFlows ?? []}
+              onConfirm={handleValidationConfirm}
+            />
+          )}
+
+          {currentStage === "interview" && (
+            <DesignInterviewStep onSubmit={handleDesignInterviewSubmit} />
+          )}
+
+          {currentStage === "reimagine" && stageLoading && (
+            <div className="rounded-2xl border border-white/5 bg-card p-8 text-center">
+              <Sparkles className="mx-auto h-10 w-10 animate-pulse text-violet-400" />
+              <h2 className="mt-4 text-lg font-semibold">Reimagining for Mobile</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                AI is redesigning your app with mobile-first UX patterns...
+              </p>
+            </div>
+          )}
+
+          {currentStage === "select" && designs.length > 0 && (
+            <DesignSelectionStep designs={designs} onConfirm={handleDesignSelection} />
+          )}
+
+          {currentStage === "builder" && (
+            <div className="rounded-2xl border border-violet-500/20 bg-card p-8 text-center">
+              <Wrench className="mx-auto h-10 w-10 text-violet-400" />
+              <h2 className="mt-4 text-lg font-semibold">Designs Saved to Builder</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Your selected designs have been loaded into the visual builder. You can edit them before converting to code.
+              </p>
+              <div className="mt-6 flex justify-center gap-3">
+                <Link to={`/builder/${project.id}`}>
+                  <Button className="gap-2 bg-primary hover:bg-primary/90">
+                    <Wrench className="h-4 w-4" />
+                    Open Visual Builder
+                  </Button>
+                </Link>
+                <Button variant="outline" onClick={startConversion}>
+                  Skip to Conversion
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {currentStage === "convert" && stageLoading && (
+            <div className="rounded-2xl border border-white/5 bg-card p-8 text-center">
+              <RefreshCw className="mx-auto h-10 w-10 animate-spin text-violet-400" />
+              <h2 className="mt-4 text-lg font-semibold">Converting to React Native</h2>
+              <p className="mt-2 text-sm text-muted-foreground">Generating production code from your approved designs...</p>
+            </div>
+          )}
+
+          {currentStage === "qa" && (
+            <div className="rounded-2xl border border-white/5 bg-card p-8 text-center">
+              <ShieldCheck className="mx-auto h-10 w-10 animate-pulse text-violet-400" />
+              <h2 className="mt-4 text-lg font-semibold">Running QA Checks</h2>
+              <p className="mt-2 text-sm text-muted-foreground">Reviewing UX, security, and accessibility...</p>
+            </div>
+          )}
+
+          {currentStage === "qa-done" && (
+            <div className="space-y-6">
+              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-8 text-center">
+                <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-400" />
+                <h2 className="mt-4 text-lg font-semibold">Your Mobile App is Ready</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  AI designed, validated, and built your mobile experience.
+                </p>
+                <div className="mt-6 flex justify-center gap-3">
+                  <Link to={`/builder/${project.id}`}>
+                    <Button className="gap-2 bg-primary hover:bg-primary/90">Open Visual Builder</Button>
+                  </Link>
+                  <Link to={`/builder/${project.id}`}>
+                    <Button variant="outline">Export Project</Button>
+                  </Link>
+                </div>
+              </div>
+
+              {qaReport && (
+                <div className="rounded-2xl border border-white/5 bg-card p-6">
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-violet-400" />
+                    QA Report
+                  </h3>
+                  {qaReport.uxIssues?.length > 0 && (
+                    <div className="mt-4">
+                      <p className="text-xs font-medium uppercase text-muted-foreground">UX Notes</p>
+                      <ul className="mt-2 space-y-1">
+                        {qaReport.uxIssues.map((issue: string, i: number) => (
+                          <li key={i} className="text-sm text-muted-foreground">- {issue}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {qaReport.securityNotes?.length > 0 && (
+                    <div className="mt-4">
+                      <p className="text-xs font-medium uppercase text-muted-foreground">Security</p>
+                      <ul className="mt-2 space-y-1">
+                        {qaReport.securityNotes.map((note: string, i: number) => (
+                          <li key={i} className="text-sm text-muted-foreground">- {note}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {qaReport.accessibilityNotes?.length > 0 && (
+                    <div className="mt-4">
+                      <p className="text-xs font-medium uppercase text-muted-foreground">Accessibility</p>
+                      <ul className="mt-2 space-y-1">
+                        {qaReport.accessibilityNotes.map((note: string, i: number) => (
+                          <li key={i} className="text-sm text-muted-foreground">- {note}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

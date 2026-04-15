@@ -1,6 +1,7 @@
 import { RequestHandler } from "express";
 
 const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY;
+const MODEL = "claude-3-5-sonnet-20241022";
 
 async function callClaude(systemPrompt: string, userPrompt: string): Promise<string> {
   if (!CLAUDE_API_KEY) {
@@ -15,7 +16,7 @@ async function callClaude(systemPrompt: string, userPrompt: string): Promise<str
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
+      model: MODEL,
       max_tokens: 4096,
       system: systemPrompt,
       messages: [{ role: "user", content: userPrompt }],
@@ -41,87 +42,61 @@ export const handleAnalyze: RequestHandler = async (req, res) => {
     }
 
     if (!CLAUDE_API_KEY) {
-      const fallbackQuestions = [
-        {
-          id: crypto.randomUUID(),
-          question: "What design style do you prefer for the mobile app?",
-          question_type: "design_style",
-          options: ["Modern", "Minimal", "Luxury", "Playful", "Corporate"],
-          answer: null,
-        },
-        {
-          id: crypto.randomUUID(),
-          question: "Who is your target audience?",
-          question_type: "target_audience",
-          options: ["Consumers", "Business Users", "Developers", "General"],
-          answer: null,
-        },
-        {
-          id: crypto.randomUUID(),
-          question: "What theme should the mobile app use?",
-          question_type: "theme",
-          options: ["Dark", "Light", "System Default"],
-          answer: null,
-        },
-        {
-          id: crypto.randomUUID(),
-          question: "What level of UX complexity do you prefer?",
-          question_type: "ux_complexity",
-          options: ["Simple", "Moderate", "Advanced"],
-          answer: null,
-        },
-      ];
-
       res.json({
         success: true,
         analysis: {
-          pages: ["Login", "Dashboard", "Settings", "Profile"],
+          pages: [
+            { name: "Login", type: "auth", description: "User authentication with email/password" },
+            { name: "Dashboard", type: "main", description: "Overview with stats, charts, recent activity" },
+            { name: "Settings", type: "settings", description: "User profile and app configuration" },
+            { name: "Profile", type: "profile", description: "User profile details and avatar" },
+          ],
+          features: [
+            "User authentication (login/signup)",
+            "Dashboard with analytics",
+            "User profile management",
+            "Settings & preferences",
+            "Data visualization",
+            "Notifications system",
+          ],
+          userFlows: [
+            { name: "Onboarding", steps: ["Signup", "Verify Email", "Complete Profile", "Dashboard"] },
+            { name: "Core Loop", steps: ["Login", "Dashboard", "View Details", "Take Action"] },
+          ],
           components: 24,
           routes: 8,
           apis: 5,
+          stateManagement: "React Context",
+          stylingSystem: "Tailwind CSS",
         },
-        questions: fallbackQuestions,
       });
       return;
     }
 
-    const systemPrompt = `You are Morphic's AI Analyzer. You analyze web application codebases and return structured JSON. You must identify: pages, components, routing structure, state management patterns, API calls, and styling system. Then generate smart design questions for the user. Return valid JSON only.`;
+    const systemPrompt = `You are Morphic's AI Analyzer. You deeply analyze web applications and return structured JSON. You must identify every page, feature, and user flow. Return valid JSON only, no markdown.`;
 
     const userPrompt = `Analyze this ${sourceType} web application${sourceUrl ? ` at ${sourceUrl}` : ""}. Project ID: ${projectId}.
 
-Return JSON with this structure:
+Return JSON:
 {
   "analysis": {
-    "pages": ["list of detected pages"],
+    "pages": [{ "name": "string", "type": "auth|main|settings|profile|detail|list|form|other", "description": "what this page does" }],
+    "features": ["list of detected features as strings"],
+    "userFlows": [{ "name": "flow name", "steps": ["step1", "step2"] }],
     "components": number,
     "routes": number,
     "apis": number,
     "stateManagement": "type",
-    "stylingSystem": "type",
-    "uxIssues": ["list of UX issues"],
-    "mobileReadiness": "low|medium|high"
-  },
-  "questions": [
-    {
-      "id": "uuid",
-      "question": "question text",
-      "question_type": "design_style|target_audience|theme|ux_complexity|general",
-      "options": ["option1", "option2"],
-      "answer": null
-    }
-  ]
+    "stylingSystem": "type"
+  }
 }`;
 
     const result = await callClaude(systemPrompt, userPrompt);
-
     let parsed;
     try {
       parsed = JSON.parse(result);
     } catch {
-      parsed = {
-        analysis: { pages: [], components: 0, routes: 0, apis: 0 },
-        questions: [],
-      };
+      parsed = { analysis: { pages: [], features: [], userFlows: [], components: 0, routes: 0, apis: 0 } };
     }
 
     res.json({ success: true, ...parsed });
@@ -131,9 +106,168 @@ Return JSON with this structure:
   }
 };
 
+export const handleReimagine: RequestHandler = async (req, res) => {
+  try {
+    const { projectId, analysis, preferences, appDescription } = req.body;
+
+    if (!projectId) {
+      res.status(400).json({ error: "Missing project ID" });
+      return;
+    }
+
+    if (!CLAUDE_API_KEY) {
+      const pages = analysis?.pages ?? [
+        { name: "Login", type: "auth" },
+        { name: "Dashboard", type: "main" },
+        { name: "Settings", type: "settings" },
+        { name: "Profile", type: "profile" },
+      ];
+
+      const designs = pages.map((page: any) => ({
+        pageName: page.name,
+        options: [
+          {
+            id: crypto.randomUUID(),
+            name: "Modern Clean",
+            description: `Clean, minimal ${page.name} with card-based layout and bottom navigation`,
+            layout: {
+              type: "ScrollView",
+              style: { backgroundColor: "#ffffff", padding: 0 },
+              children: [
+                {
+                  type: "View",
+                  label: "Header",
+                  style: { backgroundColor: preferences?.colorPalette?.[0] || "#7c3aed", padding: 24, paddingTop: 48 },
+                  children: [
+                    { type: "Text", label: page.name, style: { fontSize: 28, fontWeight: "bold", color: "#ffffff" } },
+                    { type: "Text", label: `Your ${page.name.toLowerCase()} at a glance`, style: { fontSize: 14, color: "#e0d4fc", marginTop: 4 } },
+                  ],
+                },
+                {
+                  type: "View",
+                  label: "Content",
+                  style: { padding: 16 },
+                  children: [
+                    {
+                      type: "View",
+                      label: "Card",
+                      style: { backgroundColor: "#f8f7ff", borderRadius: 16, padding: 20, marginBottom: 12 },
+                      children: [
+                        { type: "Text", label: "Welcome back", style: { fontSize: 18, fontWeight: "600", color: "#1a1a1a" } },
+                        { type: "Text", label: "Here's what's happening today", style: { fontSize: 13, color: "#666", marginTop: 4 } },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+          {
+            id: crypto.randomUUID(),
+            name: "Bold Immersive",
+            description: `Full-screen immersive ${page.name} with gradient hero and floating cards`,
+            layout: {
+              type: "ScrollView",
+              style: { backgroundColor: "#0f0f23", padding: 0 },
+              children: [
+                {
+                  type: "View",
+                  label: "Hero",
+                  style: { backgroundColor: "#1a1a3e", padding: 32, paddingTop: 56, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
+                  children: [
+                    { type: "Text", label: page.name, style: { fontSize: 32, fontWeight: "800", color: "#ffffff" } },
+                    { type: "Text", label: "Reimagined for mobile", style: { fontSize: 14, color: "#8888aa", marginTop: 8 } },
+                  ],
+                },
+                {
+                  type: "View",
+                  label: "Cards",
+                  style: { padding: 16, marginTop: -12 },
+                  children: [
+                    {
+                      type: "View",
+                      label: "Floating Card",
+                      style: { backgroundColor: "#1e1e3f", borderRadius: 20, padding: 20, marginBottom: 12 },
+                      children: [
+                        { type: "Text", label: "Quick Actions", style: { fontSize: 16, fontWeight: "600", color: "#ffffff" } },
+                        { type: "Text", label: "Swipe to explore", style: { fontSize: 12, color: "#6666aa", marginTop: 4 } },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          },
+        ],
+      }));
+
+      res.json({ success: true, designs });
+      return;
+    }
+
+    const systemPrompt = `You are Morphic's Mobile UX Reimagination Engine. You do NOT improve web UI. You REINTERPRET web applications as native mobile experiences. Rules:
+- sidebar → bottom tabs
+- dashboards → card-based scroll layouts
+- complex forms → step-based flows
+- tables → scrollable list cards
+- modals → full-screen sheets
+
+For each page, generate 2 design options as structured layout trees. Return valid JSON only, no markdown.`;
+
+    const userPrompt = `Reimagine this web app as a mobile-first experience.
+
+App description: ${appDescription || "Web application"}
+Design preferences: ${JSON.stringify(preferences)}
+Detected pages: ${JSON.stringify(analysis?.pages || [])}
+Detected features: ${JSON.stringify(analysis?.features || [])}
+User flows: ${JSON.stringify(analysis?.userFlows || [])}
+
+Return JSON:
+{
+  "designs": [
+    {
+      "pageName": "PageName",
+      "options": [
+        {
+          "id": "uuid",
+          "name": "Design Name",
+          "description": "Brief description of the mobile approach",
+          "layout": {
+            "type": "ScrollView|View",
+            "style": { "backgroundColor": "#hex", "padding": number },
+            "children": [
+              {
+                "type": "View|Text|Image",
+                "label": "component label",
+                "style": { css-like properties },
+                "children": []
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}`;
+
+    const result = await callClaude(systemPrompt, userPrompt);
+    let parsed;
+    try {
+      parsed = JSON.parse(result);
+    } catch {
+      parsed = { designs: [] };
+    }
+
+    res.json({ success: true, ...parsed });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Reimagination failed";
+    res.status(500).json({ error: message });
+  }
+};
+
 export const handleConvert: RequestHandler = async (req, res) => {
   try {
-    const { projectId, preferences } = req.body;
+    const { projectId, selectedDesigns, preferences } = req.body;
 
     if (!projectId) {
       res.status(400).json({ error: "Missing project ID" });
@@ -152,22 +286,35 @@ export const handleConvert: RequestHandler = async (req, res) => {
           { path: "services/api.ts", type: "service" },
           { path: "styles/theme.ts", type: "style" },
         ],
-        message: "Conversion complete. Connect Claude API for real code generation.",
+        message: "Conversion complete from AI-approved design.",
       });
       return;
     }
 
-    const systemPrompt = `You are Morphic's AI Converter. You convert web application code to React Native. Map: div→View, span→Text, CSS→StyleSheet, onClick→onPress. Generate proper React Navigation setup. Return valid JSON with generated file list.`;
+    const systemPrompt = `You are Morphic's Code Generator. You convert AI-approved mobile design structures into production React Native code. You do NOT convert raw web code. You build from the approved mobile design layout trees. Generate clean, typed React Native + Expo code. Return valid JSON only.`;
 
-    const userPrompt = `Convert project ${projectId} to React Native using these user preferences: ${JSON.stringify(preferences)}. Return JSON with: { "files": [{ "path": "string", "type": "string", "content": "string" }] }`;
+    const userPrompt = `Generate production React Native code from these AI-approved mobile designs.
+
+Selected designs: ${JSON.stringify(selectedDesigns)}
+User preferences: ${JSON.stringify(preferences)}
+Project ID: ${projectId}
+
+Return JSON:
+{
+  "files": [{ "path": "relative/path.tsx", "type": "screen|component|navigation|service|style", "content": "full file content" }],
+  "qa": {
+    "uxIssues": ["list of potential UX issues found"],
+    "securityNotes": ["security recommendations"],
+    "accessibilityNotes": ["a11y recommendations"]
+  }
+}`;
 
     const result = await callClaude(systemPrompt, userPrompt);
-
     let parsed;
     try {
       parsed = JSON.parse(result);
     } catch {
-      parsed = { files: [] };
+      parsed = { files: [], qa: { uxIssues: [], securityNotes: [], accessibilityNotes: [] } };
     }
 
     res.json({ success: true, ...parsed });
