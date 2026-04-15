@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
+import GithubRepoPicker from "@/components/GithubRepoPicker";
 
 type SourceType = "github" | "zip" | "url";
 
@@ -13,22 +14,19 @@ const sources = [
     type: "github" as SourceType,
     icon: Github,
     title: "GitHub Repository",
-    desc: "Import directly from a public or private repo",
-    placeholder: "https://github.com/user/repo",
+    desc: "Import from your own repos via OAuth",
   },
   {
     type: "zip" as SourceType,
     icon: FileArchive,
     title: "Upload ZIP",
     desc: "Upload your project as a ZIP archive",
-    placeholder: "",
   },
   {
     type: "url" as SourceType,
     icon: Globe,
     title: "Website URL",
     desc: "Analyze and convert a live website",
-    placeholder: "https://example.com",
   },
 ];
 
@@ -42,6 +40,9 @@ export default function NewProject() {
   const [sourceUrl, setSourceUrl] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  const canProceedStep2 =
+    sourceType === "zip" || (sourceType && sourceUrl.trim());
 
   const handleCreate = async () => {
     if (!name.trim() || !sourceType || !user) return;
@@ -133,7 +134,10 @@ export default function NewProject() {
                 {sources.map((src) => (
                   <button
                     key={src.type}
-                    onClick={() => setSourceType(src.type)}
+                    onClick={() => {
+                      setSourceType(src.type);
+                      setSourceUrl("");
+                    }}
                     className={cn(
                       "flex flex-col items-center rounded-xl border p-5 text-center transition-all",
                       sourceType === src.type
@@ -164,10 +168,25 @@ export default function NewProject() {
 
         {step === 2 && (
           <div className="mt-8 space-y-6">
-            {sourceType === "zip" ? (
+            {sourceType === "github" && (
+              <div>
+                <label className="mb-3 block text-sm font-medium">Select Repository</label>
+                <GithubRepoPicker
+                  selected={sourceUrl}
+                  onSelect={(url) => setSourceUrl(url)}
+                />
+                {sourceUrl && (
+                  <p className="mt-2 truncate text-xs text-muted-foreground">
+                    Selected: {sourceUrl}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {sourceType === "zip" && (
               <div>
                 <label className="mb-1.5 block text-sm font-medium">Upload ZIP File</label>
-                <div className="flex items-center justify-center rounded-xl border-2 border-dashed border-white/10 bg-muted/30 p-10 text-center">
+                <div className="flex cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-white/10 bg-muted/30 p-10 text-center transition-colors hover:border-violet-500/20">
                   <div>
                     <FileArchive className="mx-auto h-10 w-10 text-muted-foreground" />
                     <p className="mt-3 text-sm text-muted-foreground">
@@ -177,17 +196,17 @@ export default function NewProject() {
                   </div>
                 </div>
               </div>
-            ) : (
+            )}
+
+            {sourceType === "url" && (
               <div>
-                <label className="mb-1.5 block text-sm font-medium">
-                  {sourceType === "github" ? "Repository URL" : "Website URL"}
-                </label>
+                <label className="mb-1.5 block text-sm font-medium">Website URL</label>
                 <input
                   type="url"
                   value={sourceUrl}
                   onChange={(e) => setSourceUrl(e.target.value)}
                   className="w-full rounded-lg border border-white/10 bg-muted/50 px-3 py-2.5 text-sm outline-none transition-colors focus:border-violet-500 focus:ring-1 focus:ring-violet-500"
-                  placeholder={sources.find((s) => s.type === sourceType)?.placeholder}
+                  placeholder="https://example.com"
                 />
               </div>
             )}
@@ -203,6 +222,14 @@ export default function NewProject() {
                   <dt className="text-muted-foreground">Source</dt>
                   <dd className="font-medium capitalize">{sourceType}</dd>
                 </div>
+                {sourceUrl && (
+                  <div className="flex justify-between">
+                    <dt className="text-muted-foreground">Repository</dt>
+                    <dd className="max-w-[200px] truncate font-medium text-violet-400">
+                      {sourceUrl.replace("https://github.com/", "")}
+                    </dd>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Credits Cost</dt>
                   <dd className="font-medium text-violet-400">~10 credits</dd>
@@ -222,7 +249,7 @@ export default function NewProject() {
               </Button>
               <Button
                 onClick={handleCreate}
-                disabled={submitting || (sourceType !== "zip" && !sourceUrl.trim())}
+                disabled={submitting || !canProceedStep2}
                 className="flex-1 gap-2 bg-primary hover:bg-primary/90"
               >
                 {submitting ? (
