@@ -1,11 +1,18 @@
 import { RequestHandler } from "express";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { isAllowedWebhookUrl, sanitizeString } from "../lib/sanitize";
 
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL || "",
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ""
-);
+let _supabase: SupabaseClient | null = null;
+
+function getSupabase(): SupabaseClient {
+  if (!_supabase) {
+    const url = process.env.VITE_SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!url || !key) throw new Error("Supabase config missing");
+    _supabase = createClient(url, key);
+  }
+  return _supabase;
+}
 
 export async function sendWebhookNotification(
   userId: string,
@@ -13,7 +20,7 @@ export async function sendWebhookNotification(
   data: Record<string, any>
 ) {
   try {
-    const { data: settings } = await supabase
+    const { data: settings } = await getSupabase()
       .from("notification_settings")
       .select("webhook_url, email_notifications")
       .eq("user_id", userId)
@@ -37,7 +44,7 @@ export const handleGetNotificationSettings: RequestHandler = async (req, res) =>
   const userId = req.query.userId as string;
   if (!userId) { res.status(400).json({ error: "Missing userId" }); return; }
 
-  const { data } = await supabase
+  const { data } = await getSupabase()
     .from("notification_settings")
     .select("*")
     .eq("user_id", userId)
@@ -57,7 +64,7 @@ export const handleUpdateNotificationSettings: RequestHandler = async (req, res)
     return;
   }
 
-  const { error } = await supabase
+  const { error } = await getSupabase()
     .from("notification_settings")
     .upsert({
       user_id: userId,
