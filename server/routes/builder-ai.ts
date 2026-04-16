@@ -12,7 +12,14 @@ function getSupabase() {
 
 export const handleBuilderAI: RequestHandler = async (req, res) => {
   try {
-    const { prompt, tree, selectedNodeId, userId } = req.body;
+    const {
+      prompt,
+      tree,
+      selectedNodeId,
+      selectedNodeDescription,
+      chatHistory,
+      userId,
+    } = req.body;
 
     if (!prompt || !tree) {
       res.status(400).json({ error: "Missing prompt or tree" });
@@ -44,20 +51,58 @@ export const handleBuilderAI: RequestHandler = async (req, res) => {
         .eq("user_id", userId);
     }
 
-    const systemPrompt = `You are a mobile app design assistant inside a visual builder. The user has a component tree (JSON) representing a mobile app layout. Each node has: id, type (View/Text/ScrollView/Image), label, props (including style), and optional children.
+    // Build smart context section
+    const contextParts: string[] = [];
+    if (selectedNodeId && selectedNodeDescription) {
+      contextParts.push(
+        `The user currently has a node selected: ${selectedNodeDescription} (id: "${selectedNodeId}").`,
+        `When they say "this", "it", "the selected element", or refer to something without specifying what, they mean this node.`
+      );
+    }
 
-Your job is to modify the tree based on the user's natural language request. Return ONLY valid JSON (no markdown, no code fences) with this exact structure:
-{"tree": <the modified tree array>, "message": "<brief description of what you changed>"}
+    const systemPrompt = `You are a mobile app design assistant inside a visual builder. You are having an ongoing conversation with the user about their design. You remember everything discussed so far.
+
+The user has a component tree (JSON) representing a mobile app layout. Each node has: id, type (View/Text/ScrollView/Image), label, props (including style), and optional children.
+
+${contextParts.length > 0 ? contextParts.join(" ") : "No element is currently selected."}
+
+Your job is to modify the tree based on the user's request. Return ONLY valid JSON (no markdown, no code fences) with this structure:
+{"tree": <the modified tree array>, "message": "<brief friendly description of what you changed>"}
 
 Rules:
 - Preserve all existing node IDs when modifying existing nodes
-- When adding new nodes, generate unique IDs like "ai-${Date.now()}-0", "ai-${Date.now()}-1", etc.
+- When adding new nodes, use unique IDs like "ai-${Date.now()}-0", "ai-${Date.now()}-1", etc.
 - Only modify what the user asked for, keep everything else unchanged
 - Style values use React Native conventions (numbers for px, strings for colors)
 - Common types: View (container), Text (text), ScrollView (scrollable), Image
-- If the user references "the selected element" or "this", focus on node id "${selectedNodeId || "none"}"
 - Return the COMPLETE tree array, not just changed nodes
-- Return ONLY the JSON object, nothing else`;
+- Return ONLY the JSON object, nothing else
+- If the user says "not quite", "more", "less", "actually", "instead", or similar refinement language, they are asking you to adjust the LAST change you made. Look at the conversation history to understand what was changed and refine it.
+- Keep your "message" friendly and concise (1-2 sentences max)
+- If you genuinely cannot fulfill the request, return {"message": "<explanation>"} without a tree field`;
+
+    // Build messages array with conversation history for multi-turn
+    const messages: Array<{ role: string; content: string }> = [];
+
+    // Include chat history if available (for conversation memory)
+    if (chatHistory && Array.isArray(chatHistory) && chatHistory.length > 0) {
+      // Add previous conversation turns (skip the very last user message since we add it below with the tree)
+      const previousTurns = chatHistory.slice(0, -1);
+      for (const turn of previousTurns) {
+        if (turn.role === "user") {
+          messages.push({ role: "user", content: turn.content });
+        } else {
+          // For assistant messages, just include the text (not the full JSON tree)
+          messages.push({ role: "assistant", content: `{"message": "${turn.content.replace(/"/g, '\\"')}"}` });
+        }
+      }
+    }
+
+    // Add the current request with the current tree state
+    messages.push({
+      role: "user",
+      content: `Current component tree:\n${JSON.stringify(tree, null, 2)}\n\nUser request: "${prompt}"`,
+    });
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -70,12 +115,7 @@ Rules:
         model: "claude-3-5-haiku-20241022",
         max_tokens: 4096,
         system: systemPrompt,
-        messages: [
-          {
-            role: "user",
-            content: `Current tree:\n${JSON.stringify(tree, null, 2)}\n\nRequest: "${prompt}"`,
-          },
-        ],
+        messages,
       }),
     });
 
@@ -94,7 +134,6 @@ Rules:
 
     let parsed: any;
     try {
-      // Handle cases where AI wraps in markdown code blocks
       const cleaned = text.replace(/```(?:json)?\s*/g, "").replace(/```/g, "").trim();
       parsed = JSON.parse(cleaned);
     } catch {
@@ -112,7 +151,6 @@ Rules:
           message: `AI edit: "${prompt}"`,
         });
       }
-
       res.json({ tree: parsed.tree, message: parsed.message || "Design updated!" });
     } else {
       res.json({ message: parsed.message || "No changes were needed." });
