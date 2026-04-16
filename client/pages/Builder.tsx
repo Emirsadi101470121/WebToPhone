@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Layers, Settings, Download, Undo2, Redo2, Loader2 } from "lucide-react";
+import { ArrowLeft, Layers, Settings, Download, Undo2, Redo2, Loader2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import ComponentTree, { type TreeNode } from "@/components/builder/ComponentTree";
@@ -183,10 +183,38 @@ export default function Builder() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [tree, setTree] = useState<TreeNode[]>(defaultTree);
+  const [history, setHistory] = useState<TreeNode[][]>([]);
+  const [future, setFuture] = useState<TreeNode[][]>([]);
   const [selectedNode, setSelectedNode] = useState<TreeNode | null>(null);
   const [activePanel, setActivePanel] = useState<"tree" | "props">("tree");
   const [exporting, setExporting] = useState(false);
   const [loadingSession, setLoadingSession] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  const pushHistory = useCallback((prev: TreeNode[]) => {
+    setHistory((h) => [...h.slice(-50), prev]);
+    setFuture([]);
+  }, []);
+
+  const undo = useCallback(() => {
+    setHistory((h) => {
+      if (h.length === 0) return h;
+      const prev = h[h.length - 1];
+      setFuture((f) => [...f, tree]);
+      setTree(prev);
+      return h.slice(0, -1);
+    });
+  }, [tree]);
+
+  const redo = useCallback(() => {
+    setFuture((f) => {
+      if (f.length === 0) return f;
+      const next = f[f.length - 1];
+      setHistory((h) => [...h, tree]);
+      setTree(next);
+      return f.slice(0, -1);
+    });
+  }, [tree]);
 
   useEffect(() => {
     const loadSession = async () => {
@@ -222,6 +250,14 @@ export default function Builder() {
         e.preventDefault();
         handleExport();
       }
+      if (isMod && e.key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      }
+      if (isMod && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
+        e.preventDefault();
+        redo();
+      }
       if (e.key === "Escape") {
         setSelectedNode(null);
         setActivePanel("tree");
@@ -237,9 +273,12 @@ export default function Builder() {
   }, []);
 
   const handleUpdate = useCallback((nodeId: string, newProps: Record<string, any>) => {
-    setTree((prev) => updateNodeInTree(prev, nodeId, newProps));
+    setTree((prev) => {
+      pushHistory(prev);
+      return updateNodeInTree(prev, nodeId, newProps);
+    });
     setSelectedNode((prev) => (prev?.id === nodeId ? { ...prev, props: newProps } : prev));
-  }, []);
+  }, [pushHistory]);
 
   const handleExport = async () => {
     if (!id || !user) return;
@@ -282,10 +321,10 @@ export default function Builder() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="h-8 w-8" title="Undo">
+          <Button variant="ghost" size="icon" className="h-8 w-8" title="Undo (Cmd+Z)" onClick={undo} disabled={history.length === 0}>
             <Undo2 className="h-3.5 w-3.5" />
           </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8" title="Redo">
+          <Button variant="ghost" size="icon" className="h-8 w-8" title="Redo (Cmd+Shift+Z)" onClick={redo} disabled={future.length === 0}>
             <Redo2 className="h-3.5 w-3.5" />
           </Button>
           <div className="h-5 w-px bg-white/10" />
@@ -302,7 +341,20 @@ export default function Builder() {
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        <div className="flex w-64 flex-col border-r border-white/10">
+        {/* Mobile sidebar toggle */}
+        <button
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          className="absolute bottom-4 left-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-violet-600 text-white shadow-lg md:hidden"
+          aria-label={sidebarOpen ? "Close panel" : "Open panel"}
+        >
+          {sidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+        </button>
+
+        <div className={cn(
+          "flex flex-col border-r border-white/10 transition-all",
+          sidebarOpen ? "w-64" : "w-0 overflow-hidden",
+          "max-md:absolute max-md:inset-y-0 max-md:left-0 max-md:z-20 max-md:bg-background max-md:pt-28"
+        )}>
           <div className="flex border-b border-white/10">
             <button
               onClick={() => setActivePanel("tree")}

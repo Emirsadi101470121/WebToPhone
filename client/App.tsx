@@ -20,6 +20,8 @@ import Builder from "./pages/Builder";
 import Settings from "./pages/Settings";
 import Placeholder from "./pages/Placeholder";
 import NotFound from "./pages/NotFound";
+import ApiDocs from "./pages/ApiDocs";
+import Changelog from "./pages/Changelog";
 import ErrorBoundary from "./components/ErrorBoundary";
 
 const queryClient = new QueryClient();
@@ -32,8 +34,10 @@ export default function App() {
           <Toaster />
           <Sonner />
           <BrowserRouter>
+            <a href="#main-content" className="skip-link">Skip to content</a>
             <Navbar />
             <ErrorBoundary>
+            <div id="main-content">
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/login" element={<Login />} />
@@ -44,11 +48,14 @@ export default function App() {
               <Route path="/project/:id" element={<ProtectedRoute><Project /></ProtectedRoute>} />
               <Route path="/builder/:id" element={<ProtectedRoute><Builder /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+              <Route path="/api-docs" element={<ApiDocs />} />
+              <Route path="/changelog" element={<Changelog />} />
               <Route path="/about" element={<Placeholder />} />
               <Route path="/blog" element={<Placeholder />} />
               <Route path="/careers" element={<Placeholder />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
+            </div>
             </ErrorBoundary>
             <Footer />
           </BrowserRouter>

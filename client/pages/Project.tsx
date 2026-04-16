@@ -26,6 +26,7 @@ import DesignInterviewStep from "@/components/pipeline/DesignInterviewStep";
 import DesignSelectionStep from "@/components/pipeline/DesignSelectionStep";
 import { fetchWithRetry } from "@/lib/retry";
 import ModelSelector, { type ModelTier } from "@/components/ModelSelector";
+import CollaboratorInvite from "@/components/CollaboratorInvite";
 
 interface ProjectData {
   id: string;
@@ -99,6 +100,24 @@ export default function Project() {
       }
     };
     load();
+
+    // Real-time updates
+    const channel = supabase
+      .channel(`project-${id}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "projects", filter: `id=eq.${id}` },
+        (payload) => {
+          const updated = payload.new as any;
+          setProject((prev) => prev ? { ...prev, ...updated } : prev);
+          if (updated.status === "completed" && currentStage !== "qa-done") {
+            setCurrentStage("qa-done");
+          }
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, [id]);
 
   const stageIndex = stages.findIndex((s) => s.key === currentStage);
@@ -300,6 +319,10 @@ export default function Project() {
 
         <h1 className="text-2xl font-bold">{project.name}</h1>
         {project.description && <p className="mt-1 text-sm text-muted-foreground">{project.description}</p>}
+
+        <div className="mt-4">
+          <CollaboratorInvite projectId={project.id} />
+        </div>
 
         {/* Progress Bar */}
         <div className="mt-6">

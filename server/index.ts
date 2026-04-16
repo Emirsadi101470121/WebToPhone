@@ -10,6 +10,11 @@ import {
   handleUpdateNotificationSettings,
 } from "./routes/notifications";
 import {
+  handleGetPlans,
+  handlePurchaseCredits,
+  handleUpgradePlan,
+} from "./routes/billing";
+import {
   handleGithubAuth,
   handleGithubCallback,
   handleGithubStatus,
@@ -101,6 +106,10 @@ export function createServer() {
 
   app.get("/api/notifications/settings", handleGetNotificationSettings);
   app.post("/api/notifications/settings", handleUpdateNotificationSettings);
+
+  app.get("/api/billing/plans", handleGetPlans);
+  app.post("/api/billing/purchase-credits", handlePurchaseCredits);
+  app.post("/api/billing/upgrade-plan", handleUpgradePlan);
 
   return app;
 }

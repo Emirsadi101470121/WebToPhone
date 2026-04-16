@@ -23,6 +23,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import OnboardingTour from "@/components/OnboardingTour";
+import { CardSkeleton, ProjectSkeleton } from "@/components/Skeleton";
 
 interface Project {
   id: string;
@@ -249,7 +250,7 @@ export default function Dashboard() {
           {loading ? (
             <div className="mt-4 space-y-3">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="h-20 animate-pulse rounded-xl border border-white/5 bg-card" />
+                <ProjectSkeleton key={i} />
               ))}
             </div>
           ) : filteredProjects.length === 0 && projects.length === 0 ? (

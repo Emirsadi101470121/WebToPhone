@@ -6,11 +6,12 @@ const footerLinks = {
     { label: "Features", href: "/#features" },
     { label: "Pricing", href: "/#pricing" },
     { label: "How It Works", href: "/#how-it-works" },
+    { label: "Changelog", href: "/changelog" },
   ],
-  Company: [
-    { label: "About", href: "/about" },
+  Developers: [
+    { label: "API Docs", href: "/api-docs" },
     { label: "Blog", href: "/blog" },
-    { label: "Careers", href: "/careers" },
+    { label: "About", href: "/about" },
   ],
   Legal: [
     { label: "Privacy Policy", href: "/privacy" },

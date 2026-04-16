@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
+import CreditPurchase from "@/components/CreditPurchase";
+import PlanUpgrade from "@/components/PlanUpgrade";
 
 interface ProfileData {
   full_name: string | null;
@@ -197,6 +199,16 @@ export default function Settings() {
               <p className="mt-1 text-lg font-bold text-violet-400">{credits.balance}</p>
               <p className="text-xs text-muted-foreground">AI operations</p>
             </div>
+          </div>
+
+          <div className="mt-4">
+            <p className="mb-1 text-xs font-medium text-muted-foreground">Buy Credits</p>
+            <CreditPurchase userId={user!.id} onPurchase={() => window.location.reload()} />
+          </div>
+
+          <div className="mt-6">
+            <p className="mb-1 text-xs font-medium text-muted-foreground">Upgrade Plan</p>
+            <PlanUpgrade userId={user!.id} currentPlan={subscription.plan} onUpgrade={() => window.location.reload()} />
           </div>
         </section>
 
