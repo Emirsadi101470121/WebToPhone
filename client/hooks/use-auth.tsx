@@ -11,6 +11,16 @@ interface AuthContextType {
   signOut: () => Promise<void>;
 }
 
+function sanitizeAuthError(message: string): string {
+  const lower = message.toLowerCase();
+  if (lower.includes("invalid login")) return "Invalid email or password.";
+  if (lower.includes("email not confirmed")) return "Please confirm your email before signing in.";
+  if (lower.includes("already registered")) return "An account with this email already exists.";
+  if (lower.includes("password")) return "Password must be at least 6 characters.";
+  if (lower.includes("rate limit")) return "Too many attempts. Please wait a moment.";
+  return "Authentication failed. Please try again.";
+}
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -49,7 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         password,
         options: { data: { full_name: fullName } },
       });
-      if (error) return { error: error.message };
+      if (error) return { error: sanitizeAuthError(error.message) };
       return { error: null };
     } catch {
       return { error: "An unexpected error occurred" };
@@ -59,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = async (email: string, password: string) => {
     try {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) return { error: error.message };
+      if (error) return { error: sanitizeAuthError(error.message) };
       return { error: null };
     } catch {
       return { error: "An unexpected error occurred" };

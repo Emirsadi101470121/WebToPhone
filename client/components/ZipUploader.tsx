@@ -59,7 +59,7 @@ export default function ZipUploader({ projectName, onUploadComplete }: Props) {
         });
 
       if (uploadError) {
-        setError(uploadError.message);
+        setError("Upload failed. Please check the file and try again.");
         return;
       }
 

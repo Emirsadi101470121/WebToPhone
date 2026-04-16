@@ -6,23 +6,24 @@ export async function requestNotificationPermission(): Promise<boolean> {
   return result === "granted";
 }
 
-export function sendPipelineNotification(
+export async function sendPipelineNotification(
   title: string,
   body: string,
   projectId?: string
 ) {
   if (!("serviceWorker" in navigator)) return;
   if (Notification.permission !== "granted") return;
-
-  // Only notify if the tab is not focused
   if (document.hasFocus()) return;
 
-  navigator.serviceWorker.ready.then((reg) => {
+  try {
+    const reg = await navigator.serviceWorker.ready;
     reg.active?.postMessage({
       type: "SHOW_NOTIFICATION",
       title,
       body,
       url: projectId ? `/project/${projectId}` : "/dashboard",
     });
-  });
+  } catch {
+    // Notification delivery is best-effort
+  }
 }

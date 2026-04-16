@@ -46,7 +46,7 @@ export default function CollaboratorInvite({ projectId }: Props) {
         status: "pending",
       });
       if (error) {
-        toast.error(error.message);
+        toast.error("Failed to send invitation. Please try again.");
       } else {
         toast.success(`Invited ${email.trim()}`);
         setEmail("");

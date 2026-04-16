@@ -110,7 +110,7 @@ export default function NewProject() {
         .single();
 
       if (dbError) {
-        setError(dbError.message);
+        setError("Failed to create project. Please try again.");
         return;
       }
 

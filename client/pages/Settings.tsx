@@ -106,7 +106,9 @@ export default function Settings() {
             return { action, count: data.count, trend };
           }));
         }
-      } catch {} finally {
+      } catch {
+        // Settings load failure is non-critical, show defaults
+      } finally {
         setLoading(false);
       }
     };

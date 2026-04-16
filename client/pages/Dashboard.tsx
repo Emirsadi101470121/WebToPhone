@@ -124,7 +124,7 @@ export default function Dashboard() {
         aiQueries: logsRes.data?.length ?? 0,
       });
     } catch {
-      // silent
+      // Dashboard data refresh is best-effort
     } finally {
       setLoading(false);
       setRefreshing(false);

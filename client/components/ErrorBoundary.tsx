@@ -37,7 +37,7 @@ export default class ErrorBoundary extends Component<Props, State> {
           <p className="mt-2 max-w-sm text-center text-sm text-muted-foreground">
             {this.props.fallbackMessage || "An unexpected error occurred. Try refreshing the page."}
           </p>
-          {this.state.error && (
+          {process.env.NODE_ENV === "development" && this.state.error && (
             <code className="mt-4 max-w-md rounded-lg bg-red-500/5 px-4 py-2 text-xs text-red-400">
               {this.state.error.message}
             </code>

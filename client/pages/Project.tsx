@@ -73,7 +73,9 @@ export default function Project() {
       await supabase.from("projects").update({
         pipeline_state: { stage, ...stateData },
       }).eq("id", id);
-    } catch {}
+    } catch {
+      // Pipeline state save is best-effort
+    }
   };
 
   useEffect(() => {
@@ -96,7 +98,9 @@ export default function Project() {
             if (ps.qaReport) setQaReport(ps.qaReport);
           }
         }
-      } catch {} finally {
+      } catch {
+        toast.error("Failed to load project. Please refresh the page.");
+      } finally {
         setLoading(false);
       }
     };
@@ -161,7 +165,9 @@ export default function Project() {
         setCurrentStage("validate");
         await savePipelineState("validate", { analysis: data.analysis });
       }
-    } catch {} finally {
+    } catch {
+      toast.error("Analysis failed. Please try again.");
+    } finally {
       setStageLoading(false);
     }
   };
@@ -177,7 +183,9 @@ export default function Project() {
         user_id: user!.id,
         custom_notes: data.appDescription,
       }, { onConflict: "project_id" });
-    } catch {}
+    } catch {
+      // Preference save is best-effort
+    }
   };
 
   const handleDesignInterviewSubmit = async (prefs: any) => {
@@ -225,7 +233,9 @@ export default function Project() {
         setCurrentStage("select");
         await savePipelineState("select", { analysis, validatedData, preferences: prefs, designs: data.designs ?? [] });
       }
-    } catch {} finally {
+    } catch {
+      toast.error("Design generation failed. Please try again.");
+    } finally {
       setStageLoading(false);
     }
   };
@@ -250,7 +260,9 @@ export default function Project() {
       });
 
       await supabase.from("projects").update({ status: "converting" }).eq("id", project!.id);
-    } catch {}
+    } catch {
+      toast.error("Failed to save design selections.");
+    }
   };
 
   const startConversion = async () => {
@@ -289,7 +301,9 @@ export default function Project() {
 
         setTimeout(() => setCurrentStage("qa-done"), 2000);
       }
-    } catch {} finally {
+    } catch {
+      toast.error("Conversion failed. Please try again.");
+    } finally {
       setStageLoading(false);
     }
   };

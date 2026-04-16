@@ -25,20 +25,24 @@ export default function Navbar() {
     document.documentElement.classList.toggle("dark", next);
     localStorage.setItem("theme", next ? "dark" : "light");
     if (user) {
-      supabase.from("profiles").update({ theme: next ? "dark" : "light" }).eq("id", user.id).then();
+      supabase.from("profiles").update({ theme: next ? "dark" : "light" }).eq("id", user.id).then(() => {}, () => {});
     }
   };
 
   useEffect(() => {
     const loadTheme = async () => {
       if (user) {
-        const { data } = await supabase.from("profiles").select("theme").eq("id", user.id).single();
-        if (data?.theme) {
-          const dark = data.theme === "dark";
-          setIsDark(dark);
-          document.documentElement.classList.toggle("dark", dark);
-          localStorage.setItem("theme", data.theme);
-          return;
+        try {
+          const { data } = await supabase.from("profiles").select("theme").eq("id", user.id).single();
+          if (data?.theme) {
+            const dark = data.theme === "dark";
+            setIsDark(dark);
+            document.documentElement.classList.toggle("dark", dark);
+            localStorage.setItem("theme", data.theme);
+            return;
+          }
+        } catch {
+          // Column may not exist yet, fall through to localStorage
         }
       }
       const saved = localStorage.getItem("theme");

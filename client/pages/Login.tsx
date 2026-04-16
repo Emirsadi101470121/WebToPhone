@@ -80,7 +80,7 @@ export default function Login() {
               provider: "github",
               options: { redirectTo: `${window.location.origin}/dashboard` },
             });
-            if (error) setError(error.message);
+            if (error) setError("GitHub sign-in failed. Please try again.");
           }}
         >
           <Github className="h-4 w-4" />

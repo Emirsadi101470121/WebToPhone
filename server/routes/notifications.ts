@@ -74,7 +74,7 @@ export const handleUpdateNotificationSettings: RequestHandler = async (req, res)
     }, { onConflict: "user_id" });
 
   if (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: "Failed to update notification settings" });
   } else {
     res.json({ success: true });
   }

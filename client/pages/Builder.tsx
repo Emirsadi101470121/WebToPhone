@@ -212,7 +212,9 @@ export default function Builder() {
             toast.success("Builder loaded from your design selections");
           }
         }
-      } catch {} finally { setLoadingSession(false); }
+      } catch {
+        // Session load failed, use default tree
+      } finally { setLoadingSession(false); }
     };
     loadSession();
   }, [id, user]);
