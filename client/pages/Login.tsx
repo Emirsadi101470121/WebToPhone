@@ -76,11 +76,18 @@ export default function Login() {
           variant="outline"
           className="w-full gap-2 border-white/10"
           onClick={async () => {
-            const { error } = await supabase.auth.signInWithOAuth({
+            const { data, error } = await supabase.auth.signInWithOAuth({
               provider: "github",
-              options: { redirectTo: `${window.location.origin}/dashboard` },
+              options: {
+                redirectTo: `${window.location.origin}/dashboard`,
+                skipBrowserRedirect: true,
+              },
             });
-            if (error) setError("GitHub sign-in failed. Please try again.");
+            if (error) {
+              setError("GitHub sign-in failed. Please try again.");
+            } else if (data?.url) {
+              window.open(data.url, "_blank", "noopener,noreferrer");
+            }
           }}
         >
           <Github className="h-4 w-4" />
