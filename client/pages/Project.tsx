@@ -27,6 +27,7 @@ import DesignSelectionStep from "@/components/pipeline/DesignSelectionStep";
 import { fetchWithRetry } from "@/lib/retry";
 import ModelSelector, { type ModelTier } from "@/components/ModelSelector";
 import CollaboratorInvite from "@/components/CollaboratorInvite";
+import { requestNotificationPermission, sendPipelineNotification } from "@/lib/notifications";
 
 interface ProjectData {
   id: string;
@@ -124,6 +125,7 @@ export default function Project() {
 
   const startAnalysis = async () => {
     if (!project || !user) return;
+    requestNotificationPermission();
     setStageLoading(true);
     setCurrentStage("analyze");
 
@@ -154,6 +156,7 @@ export default function Project() {
         setAnalysis(data.analysis);
         const cost = modelTier === "haiku" ? 3 : modelTier === "opus" ? 15 : 5;
         toast.success(`Analysis complete - ${cost} credits used (${modelTier})`);
+        sendPipelineNotification("Analysis Complete", `"${project.name}" analysis is done. Ready for validation.`, id);
         await supabase.from("projects").update({ status: "analyzed" }).eq("id", project.id);
         setCurrentStage("validate");
         await savePipelineState("validate", { analysis: data.analysis });
@@ -218,6 +221,7 @@ export default function Project() {
         setDesigns(data.designs ?? []);
         const cost = modelTier === "haiku" ? 5 : modelTier === "opus" ? 30 : 10;
         toast.success(`Mobile UX reimagined - ${cost} credits used (${modelTier})`);
+        sendPipelineNotification("Designs Ready", `"${project.name}" mobile designs are ready for selection.`, id);
         setCurrentStage("select");
         await savePipelineState("select", { analysis, validatedData, preferences: prefs, designs: data.designs ?? [] });
       }
@@ -281,6 +285,7 @@ export default function Project() {
         setStageLoading(false);
 
         await supabase.from("projects").update({ status: "completed" }).eq("id", project!.id);
+        sendPipelineNotification("Conversion Complete", `"${project!.name}" is ready! Open the builder to refine and export.`, id);
 
         setTimeout(() => setCurrentStage("qa-done"), 2000);
       }

@@ -4,6 +4,7 @@ import { Menu, X, Zap, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
+import { supabase } from "@/lib/supabase";
 
 const navLinks = [
   { label: "Features", href: "/#features" },
@@ -18,20 +19,36 @@ export default function Navbar() {
   const { user, loading } = useAuth();
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
 
-  const toggleTheme = () => {
+  const toggleTheme = async () => {
     const next = !isDark;
     setIsDark(next);
     document.documentElement.classList.toggle("dark", next);
     localStorage.setItem("theme", next ? "dark" : "light");
+    if (user) {
+      supabase.from("profiles").update({ theme: next ? "dark" : "light" }).eq("id", user.id).then();
+    }
   };
 
   useEffect(() => {
-    const saved = localStorage.getItem("theme");
-    if (saved === "light") {
-      document.documentElement.classList.remove("dark");
-      setIsDark(false);
-    }
-  }, []);
+    const loadTheme = async () => {
+      if (user) {
+        const { data } = await supabase.from("profiles").select("theme").eq("id", user.id).single();
+        if (data?.theme) {
+          const dark = data.theme === "dark";
+          setIsDark(dark);
+          document.documentElement.classList.toggle("dark", dark);
+          localStorage.setItem("theme", data.theme);
+          return;
+        }
+      }
+      const saved = localStorage.getItem("theme");
+      if (saved === "light") {
+        document.documentElement.classList.remove("dark");
+        setIsDark(false);
+      }
+    };
+    loadTheme();
+  }, [user]);
 
   const handleNavClick = (href: string) => {
     setMobileOpen(false);

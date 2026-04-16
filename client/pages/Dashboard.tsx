@@ -16,6 +16,11 @@ import {
   RefreshCw,
   Settings,
   Search,
+  Copy,
+  Share2,
+  CheckSquare,
+  Square,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -90,6 +95,9 @@ export default function Dashboard() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkMode, setBulkMode] = useState(false);
+  const [cloningId, setCloningId] = useState<string | null>(null);
 
   const filteredProjects = projects.filter((p) => {
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -156,6 +164,58 @@ export default function Dashboard() {
     }
   };
 
+  const handleClone = async (e: React.MouseEvent, project: Project) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setCloningId(project.id);
+    try {
+      const { data: orig } = await supabase.from("projects").select("*").eq("id", project.id).single();
+      if (!orig) { toast.error("Project not found"); return; }
+      const { id: _id, created_at: _c, updated_at: _u, share_token: _s, share_enabled: _se, ...rest } = orig;
+      const { error } = await supabase.from("projects").insert({
+        ...rest,
+        name: `${orig.name} (Copy)`,
+        status: "pending",
+        pipeline_state: null,
+      });
+      if (error) toast.error("Clone failed");
+      else { toast.success(`Cloned "${orig.name}"`); await loadData(); }
+    } catch { toast.error("Clone failed"); }
+    finally { setCloningId(null); }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`Delete ${selectedIds.size} project(s)? This cannot be undone.`)) return;
+    try {
+      const { error } = await supabase.from("projects").delete().in("id", Array.from(selectedIds));
+      if (error) toast.error("Bulk delete failed");
+      else { toast.success(`${selectedIds.size} project(s) deleted`); setSelectedIds(new Set()); setBulkMode(false); await loadData(); }
+    } catch { toast.error("Bulk delete failed"); }
+  };
+
+  const handleShareLink = async (e: React.MouseEvent, projectId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      const token = crypto.randomUUID();
+      await supabase.from("projects").update({ share_token: token, share_enabled: true }).eq("id", projectId);
+      const link = `${window.location.origin}/shared/${token}`;
+      await navigator.clipboard.writeText(link);
+      toast.success("Share link copied to clipboard!");
+    } catch { toast.error("Failed to generate share link"); }
+  };
+
+  const toggleSelect = (e: React.MouseEvent, id: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
   const statCards = [
     { label: "Projects", value: stats.projects, icon: Folder },
     { label: "Conversions", value: stats.conversions, icon: Smartphone },
@@ -187,6 +247,14 @@ export default function Dashboard() {
                 <Settings className="h-4 w-4" />
               </Button>
             </Link>
+            <Button
+              variant={bulkMode ? "default" : "ghost"}
+              size="icon"
+              onClick={() => { setBulkMode(!bulkMode); setSelectedIds(new Set()); }}
+              title={bulkMode ? "Exit bulk mode" : "Select multiple"}
+            >
+              {bulkMode ? <X className="h-4 w-4" /> : <CheckSquare className="h-4 w-4" />}
+            </Button>
             <Link to="/new-project">
               <Button className="gap-2 bg-primary hover:bg-primary/90">
                 <Plus className="h-4 w-4" />
@@ -219,7 +287,14 @@ export default function Dashboard() {
 
         <div className="mt-8">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="text-lg font-semibold">Your Projects</h2>
+            <div className="flex items-center gap-3">
+              <h2 className="text-lg font-semibold">Your Projects</h2>
+              {bulkMode && selectedIds.size > 0 && (
+                <Button size="sm" variant="destructive" onClick={handleBulkDelete} className="gap-1.5 text-xs">
+                  <Trash2 className="h-3 w-3" /> Delete {selectedIds.size}
+                </Button>
+              )}
+            </div>
             <div className="flex gap-2">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -297,14 +372,37 @@ export default function Dashboard() {
                   </div>
                   <div className="flex items-center gap-3">
                     {statusBadge(project.status)}
-                    <button
-                      onClick={(e) => handleDelete(e, project.id, project.name)}
-                      disabled={deletingId === project.id}
-                      className="rounded-lg p-1.5 text-muted-foreground/50 transition-colors hover:bg-destructive/10 hover:text-red-400"
-                      title="Delete project"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    {bulkMode ? (
+                      <button onClick={(e) => toggleSelect(e, project.id)} className="rounded p-1 text-muted-foreground hover:text-foreground">
+                        {selectedIds.has(project.id) ? <CheckSquare className="h-4 w-4 text-violet-400" /> : <Square className="h-4 w-4" />}
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          onClick={(e) => handleShareLink(e, project.id)}
+                          className="rounded-lg p-1.5 text-muted-foreground/50 transition-colors hover:bg-violet-500/10 hover:text-violet-400"
+                          title="Copy share link"
+                        >
+                          <Share2 className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={(e) => handleClone(e, project)}
+                          disabled={cloningId === project.id}
+                          className="rounded-lg p-1.5 text-muted-foreground/50 transition-colors hover:bg-blue-500/10 hover:text-blue-400"
+                          title="Clone project"
+                        >
+                          <Copy className={cn("h-3.5 w-3.5", cloningId === project.id && "animate-pulse")} />
+                        </button>
+                        <button
+                          onClick={(e) => handleDelete(e, project.id, project.name)}
+                          disabled={deletingId === project.id}
+                          className="rounded-lg p-1.5 text-muted-foreground/50 transition-colors hover:bg-destructive/10 hover:text-red-400"
+                          title="Delete project"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </>
+                    )}
                     <ArrowRight className="h-4 w-4 text-muted-foreground" />
                   </div>
                 </Link>

@@ -23,6 +23,7 @@ import NotFound from "./pages/NotFound";
 import ApiDocs from "./pages/ApiDocs";
 import Changelog from "./pages/Changelog";
 import ErrorBoundary from "./components/ErrorBoundary";
+import SharedProject from "./pages/SharedProject";
 
 const queryClient = new QueryClient();
 
@@ -48,6 +49,7 @@ export default function App() {
               <Route path="/project/:id" element={<ProtectedRoute><Project /></ProtectedRoute>} />
               <Route path="/builder/:id" element={<ProtectedRoute><Builder /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+              <Route path="/shared/:token" element={<SharedProject />} />
               <Route path="/api-docs" element={<ApiDocs />} />
               <Route path="/changelog" element={<Changelog />} />
               <Route path="/about" element={<Placeholder />} />

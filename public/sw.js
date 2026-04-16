@@ -1,4 +1,4 @@
-const CACHE_NAME = "morphic-v1";
+const CACHE_NAME = "morphic-v2";
 const STATIC_ASSETS = ["/", "/dashboard", "/login"];
 
 self.addEventListener("install", (event) => {
@@ -18,7 +18,6 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  // Network-first for API calls, cache-first for static assets
   if (event.request.url.includes("/api/")) return;
 
   event.respondWith(
@@ -29,5 +28,35 @@ self.addEventListener("fetch", (event) => {
         return response;
       })
       .catch(() => caches.match(event.request))
+  );
+});
+
+// Listen for messages from the app to show notifications
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SHOW_NOTIFICATION") {
+    const { title, body, url } = event.data;
+    self.registration.showNotification(title, {
+      body,
+      icon: "/favicon.ico",
+      badge: "/favicon.ico",
+      tag: "morphic-pipeline",
+      data: { url },
+      actions: [{ action: "open", title: "View Project" }],
+    });
+  }
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || "/dashboard";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window" }).then((clients) => {
+      for (const client of clients) {
+        if (client.url.includes(url) && "focus" in client) {
+          return client.focus();
+        }
+      }
+      return self.clients.openWindow(url);
+    })
   );
 });

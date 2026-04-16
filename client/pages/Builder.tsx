@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Layers, Settings, Download, Undo2, Redo2, Loader2, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { ArrowLeft, Layers, Settings, Download, Undo2, Redo2, Loader2, PanelLeftClose, PanelLeftOpen, ChevronDown, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import ComponentTree, { type TreeNode } from "@/components/builder/ComponentTree";
@@ -10,6 +10,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { exportProject } from "@/lib/export";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
+import ComponentLibrary from "@/components/builder/ComponentLibrary";
 
 function buildTreeFromSession(componentTree: any[]): TreeNode[] {
   if (!componentTree?.length) return [];
@@ -186,10 +187,12 @@ export default function Builder() {
   const [history, setHistory] = useState<TreeNode[][]>([]);
   const [future, setFuture] = useState<TreeNode[][]>([]);
   const [selectedNode, setSelectedNode] = useState<TreeNode | null>(null);
-  const [activePanel, setActivePanel] = useState<"tree" | "props">("tree");
+  const [activePanel, setActivePanel] = useState<"tree" | "props" | "library">("tree");
   const [exporting, setExporting] = useState(false);
   const [loadingSession, setLoadingSession] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [exportFormat, setExportFormat] = useState<"react-native" | "flutter" | "swiftui">("react-native");
+  const [showExportMenu, setShowExportMenu] = useState(false);
 
   const pushHistory = useCallback((prev: TreeNode[]) => {
     setHistory((h) => [...h.slice(-50), prev]);
@@ -280,13 +283,28 @@ export default function Builder() {
     setSelectedNode((prev) => (prev?.id === nodeId ? { ...prev, props: newProps } : prev));
   }, [pushHistory]);
 
+  const handleInsertComponent = useCallback((node: TreeNode) => {
+    setTree((prev) => {
+      pushHistory(prev);
+      const root = prev[0];
+      if (!root) return prev;
+      const contentNode = root.children?.find(c => c.label === "Content") || root;
+      const target = contentNode === root ? root : contentNode;
+      const updatedTarget = { ...target, children: [...(target.children || []), node] };
+      if (target === root) return [updatedTarget];
+      return [{ ...root, children: root.children?.map(c => c.id === target.id ? updatedTarget : c) }];
+    });
+    toast.success(`Added ${node.label}`);
+    setActivePanel("tree");
+  }, [pushHistory]);
+
   const handleExport = async () => {
     if (!id || !user) return;
     setExporting(true);
     try {
-      const success = await exportProject(id, user.id, "morphic-app");
+      const success = await exportProject(id, user.id, "morphic-app", exportFormat);
       if (success) {
-        toast.success("Project exported as ZIP");
+        toast.success(`Project exported as ${formatLabels[exportFormat]} ZIP`);
       } else {
         toast.error("Export failed");
       }
@@ -295,6 +313,12 @@ export default function Builder() {
     } finally {
       setExporting(false);
     }
+  };
+
+  const formatLabels: Record<string, string> = {
+    "react-native": "React Native",
+    flutter: "Flutter",
+    swiftui: "SwiftUI",
   };
 
   if (loadingSession) {
@@ -328,15 +352,42 @@ export default function Builder() {
             <Redo2 className="h-3.5 w-3.5" />
           </Button>
           <div className="h-5 w-px bg-white/10" />
-          <Button
-            size="sm"
-            onClick={handleExport}
-            disabled={exporting}
-            className="gap-1.5 bg-primary text-xs hover:bg-primary/90"
-          >
-            <Download className="h-3.5 w-3.5" />
-            {exporting ? "Exporting..." : "Export"}
-          </Button>
+          <div className="relative">
+            <div className="flex">
+              <Button
+                size="sm"
+                onClick={handleExport}
+                disabled={exporting}
+                className="gap-1.5 rounded-r-none bg-primary text-xs hover:bg-primary/90"
+              >
+                <Download className="h-3.5 w-3.5" />
+                {exporting ? "Exporting..." : formatLabels[exportFormat]}
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => setShowExportMenu(!showExportMenu)}
+                className="rounded-l-none border-l border-white/20 bg-primary px-1.5 hover:bg-primary/90"
+              >
+                <ChevronDown className="h-3 w-3" />
+              </Button>
+            </div>
+            {showExportMenu && (
+              <div className="absolute right-0 top-full z-30 mt-1 w-44 rounded-lg border border-white/10 bg-card p-1 shadow-xl">
+                {(["react-native", "flutter", "swiftui"] as const).map((fmt) => (
+                  <button
+                    key={fmt}
+                    onClick={() => { setExportFormat(fmt); setShowExportMenu(false); }}
+                    className={cn(
+                      "flex w-full items-center rounded-md px-3 py-2 text-xs font-medium transition-colors",
+                      exportFormat === fmt ? "bg-violet-500/20 text-violet-300" : "text-muted-foreground hover:bg-white/5"
+                    )}
+                  >
+                    {formatLabels[fmt]}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -374,7 +425,17 @@ export default function Builder() {
               )}
             >
               <Settings className="h-3.5 w-3.5" />
-              Properties
+              Props
+            </button>
+            <button
+              onClick={() => setActivePanel("library")}
+              className={cn(
+                "flex flex-1 items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors",
+                activePanel === "library" ? "border-b-2 border-violet-500 text-violet-400" : "text-muted-foreground"
+              )}
+            >
+              <Package className="h-3.5 w-3.5" />
+              Add
             </button>
           </div>
 
@@ -385,11 +446,13 @@ export default function Builder() {
                 selectedId={selectedNode?.id ?? null}
                 onSelect={handleSelect}
               />
-            ) : (
+            ) : activePanel === "props" ? (
               <PropertiesPanel
                 node={selectedNode}
                 onUpdate={handleUpdate}
               />
+            ) : (
+              <ComponentLibrary onInsert={handleInsertComponent} />
             )}
           </div>
         </div>

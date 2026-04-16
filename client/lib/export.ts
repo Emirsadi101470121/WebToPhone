@@ -4,13 +4,14 @@ import { saveAs } from "file-saver";
 export async function exportProject(
   projectId: string,
   userId: string,
-  projectName: string
+  projectName: string,
+  format: string = "react-native"
 ): Promise<boolean> {
   try {
     const response = await fetch("/api/export", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projectId, userId }),
+      body: JSON.stringify({ projectId, userId, format }),
     });
 
     if (!response.ok) return false;

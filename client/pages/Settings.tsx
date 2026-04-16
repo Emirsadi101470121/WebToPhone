@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import CreditPurchase from "@/components/CreditPurchase";
 import PlanUpgrade from "@/components/PlanUpgrade";
+import SparklineChart from "@/components/SparklineChart";
 
 interface ProfileData {
   full_name: string | null;
@@ -25,6 +26,7 @@ interface SubData {
 interface UsageEntry {
   action: string;
   count: number;
+  trend: number[];
 }
 
 export default function Settings() {
@@ -80,15 +82,29 @@ export default function Settings() {
           .eq("status", "completed");
         setReferralCount(count ?? 0);
 
-        // Load usage stats
+        // Load usage stats with trend data
         const { data: logs } = await supabase
           .from("logs")
-          .select("action")
-          .eq("user_id", user.id);
+          .select("action, created_at")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: true });
         if (logs) {
-          const counts: Record<string, number> = {};
-          logs.forEach((l: any) => { counts[l.action] = (counts[l.action] || 0) + 1; });
-          setUsage(Object.entries(counts).map(([action, count]) => ({ action, count })));
+          const byAction: Record<string, { count: number; dates: string[] }> = {};
+          logs.forEach((l: any) => {
+            if (!byAction[l.action]) byAction[l.action] = { count: 0, dates: [] };
+            byAction[l.action].count++;
+            byAction[l.action].dates.push(l.created_at);
+          });
+          setUsage(Object.entries(byAction).map(([action, data]) => {
+            // Build 7-day trend
+            const now = Date.now();
+            const trend = Array.from({ length: 7 }, (_, i) => {
+              const dayStart = now - (6 - i) * 86400000;
+              const dayEnd = dayStart + 86400000;
+              return data.dates.filter(d => { const t = new Date(d).getTime(); return t >= dayStart && t < dayEnd; }).length;
+            });
+            return { action, count: data.count, trend };
+          }));
         }
       } catch {} finally {
         setLoading(false);
@@ -225,12 +241,15 @@ export default function Settings() {
               {usage.map((entry) => {
                 const maxCount = Math.max(...usage.map((u) => u.count), 1);
                 return (
-                  <div key={entry.action}>
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="capitalize text-muted-foreground">{entry.action.replace(/_/g, " ")}</span>
-                      <span className="font-medium">{entry.count}</span>
+                  <div key={entry.action} className="rounded-lg border border-white/5 bg-background p-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-xs font-medium capitalize">{entry.action.replace(/_/g, " ")}</span>
+                        <p className="text-lg font-bold text-violet-400">{entry.count}</p>
+                      </div>
+                      <SparklineChart data={entry.trend} />
                     </div>
-                    <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-white/5">
+                    <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-white/5">
                       <div
                         className="h-full rounded-full bg-violet-500 transition-all"
                         style={{ width: `${(entry.count / maxCount) * 100}%` }}
