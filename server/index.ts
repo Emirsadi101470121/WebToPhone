@@ -14,6 +14,7 @@ import {
   handlePurchaseCredits,
   handleUpgradePlan,
 } from "./routes/billing";
+import { handleBuilderAI } from "./routes/builder-ai";
 import {
   handleGithubAuth,
   handleGithubCallback,
@@ -97,6 +98,7 @@ export function createServer() {
   app.post("/api/convert", aiLimiter, handleConvert);
 
   app.post("/api/export", handleExport);
+  app.post("/api/builder-ai", aiLimiter, handleBuilderAI);
 
   app.get("/api/github/auth", handleGithubAuth);
   app.get("/api/github/callback", handleGithubCallback);
