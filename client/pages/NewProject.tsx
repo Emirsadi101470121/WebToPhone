@@ -6,7 +6,7 @@ import {
   Newspaper, GraduationCap, HeartPulse, Dumbbell, Plane,
   Music, Film, Utensils, Wallet, Briefcase,
   CalendarDays, MessageCircle, Camera, Gamepad2, BookOpen,
-  Map, Sparkles, Building2, Car, PawPrint,
+  Map, Sparkles, Building2, Car, PawPrint, Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -98,6 +98,9 @@ export default function NewProject() {
   const [error, setError] = useState("");
 
   const [activeCategory, setActiveCategory] = useState<TemplateCategory | "All">("All");
+  const [customOpen, setCustomOpen] = useState(false);
+  const [customCategory, setCustomCategory] = useState("");
+  const [resolvedCategory, setResolvedCategory] = useState<string>("");
 
   const visibleTemplates =
     activeCategory === "All"
@@ -113,7 +116,21 @@ export default function NewProject() {
     if (tpl && templateId !== "blank") {
       setName(tpl.name);
       setDescription(tpl.description);
+      setResolvedCategory(tpl.name);
+    } else {
+      setResolvedCategory("");
     }
+    setStep(1);
+  };
+
+  const handleCustomCategorySubmit = () => {
+    const trimmed = customCategory.trim();
+    if (!trimmed) return;
+    setSelectedTemplate("custom");
+    setName(trimmed);
+    setDescription(`Custom ${trimmed} app`);
+    setResolvedCategory(trimmed);
+    setCustomOpen(false);
     setStep(1);
   };
 
@@ -135,6 +152,7 @@ export default function NewProject() {
           source_type: sourceType,
           source_url: sourceUrl.trim() || null,
           status: "pending",
+          category: resolvedCategory || null,
         })
         .select("id")
         .single();
@@ -229,7 +247,49 @@ export default function NewProject() {
                     </div>
                   </button>
                 ))}
+
+                <button
+                  onClick={() => setCustomOpen((v) => !v)}
+                  className={cn(
+                    "flex items-start gap-3 rounded-xl border border-dashed p-4 text-left transition-all",
+                    selectedTemplate === "custom"
+                      ? "border-violet-500 bg-violet-500/10"
+                      : "border-white/10 bg-card hover:border-violet-500/30"
+                  )}
+                >
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-500/10">
+                    <Plus className="h-5 w-5 text-violet-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-medium">Custom — describe it</h3>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Any niche (legal, real estate, IoT, etc.). The AI uses this as context.
+                    </p>
+                  </div>
+                </button>
               </div>
+
+              {customOpen && (
+                <div className="mt-3 space-y-2 rounded-xl border border-white/10 bg-card p-4">
+                  <label className="block text-xs font-medium text-muted-foreground">
+                    Describe your category
+                  </label>
+                  <input
+                    type="text"
+                    value={customCategory}
+                    onChange={(e) => setCustomCategory(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleCustomCategorySubmit(); }}
+                    placeholder="e.g. Real Estate Listings, Legal CRM, Smart Home..."
+                    className="w-full rounded-lg border border-white/10 bg-muted/50 px-3 py-2 text-sm outline-none transition-colors focus:border-violet-500 focus:ring-1 focus:ring-violet-500"
+                  />
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setCustomOpen(false)}>Cancel</Button>
+                    <Button size="sm" onClick={handleCustomCategorySubmit} disabled={!customCategory.trim()}>
+                      Use this category
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

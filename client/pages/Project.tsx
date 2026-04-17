@@ -36,6 +36,7 @@ interface ProjectData {
   source_type: string;
   source_url: string | null;
   status: string;
+  category: string | null;
 }
 
 const stages = [
@@ -143,6 +144,7 @@ export default function Project() {
           projectId: project.id,
           sourceType: project.source_type,
           sourceUrl: project.source_url,
+          category: project.category,
           userId: user.id,
           modelTier,
         }),
@@ -211,6 +213,7 @@ export default function Project() {
           analysis,
           preferences: prefs,
           appDescription: validatedData?.appDescription,
+          category: project!.category,
           userId: user!.id,
           modelTier,
         }),

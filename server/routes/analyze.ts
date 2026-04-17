@@ -53,6 +53,7 @@ export const handleAnalyze: RequestHandler = async (req, res) => {
     const projectId = sanitizeString(req.body.projectId);
     const sourceType = sanitizeString(req.body.sourceType);
     const sourceUrl = req.body.sourceUrl ? sanitizeUrl(req.body.sourceUrl) : "";
+    const category = req.body.category ? sanitizeString(req.body.category) : "";
     const userId = req.body.userId ? sanitizeString(req.body.userId) : undefined;
     const modelTier = resolveModel(req.body, "analyze");
 
@@ -104,7 +105,7 @@ export const handleAnalyze: RequestHandler = async (req, res) => {
 
     const systemPrompt = `You are Morphic's AI Analyzer. You deeply analyze web applications and return structured JSON. You must identify every page, feature, and user flow. Return valid JSON only, no markdown.`;
 
-    const userPrompt = `Analyze this ${sourceType} web application${sourceUrl ? ` at ${sourceUrl}` : ""}. Project ID: ${projectId}.
+    const userPrompt = `Analyze this ${sourceType} web application${sourceUrl ? ` at ${sourceUrl}` : ""}. Project ID: ${projectId}.${category ? `\nApp category context (use this to inform the analysis without copying any template): ${category}.` : ""}
 
 Return JSON:
 {
@@ -141,6 +142,7 @@ export const handleReimagine: RequestHandler = async (req, res) => {
     const analysis = req.body.analysis;
     const preferences = req.body.preferences;
     const appDescription = sanitizeString(req.body.appDescription);
+    const category = req.body.category ? sanitizeString(req.body.category) : "";
     const userId = req.body.userId ? sanitizeString(req.body.userId) : undefined;
     const modelTier = resolveModel(req.body, "reimagine");
 
@@ -258,6 +260,7 @@ For each page, generate 2 design options as structured layout trees. Return vali
 
     const userPrompt = `Reimagine this web app as a mobile-first experience.
 
+App category (skeleton context only — design must be original, not a template): ${category || "unspecified"}
 App description: ${appDescription || "Web application"}
 Design preferences: ${JSON.stringify(preferences)}
 Detected pages: ${JSON.stringify(analysis?.pages || [])}
