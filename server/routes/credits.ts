@@ -25,7 +25,7 @@ export const AI_MODELS = {
     multiplier: 1,
   },
   opus: {
-    id: "claude-3-opus-20240229",
+    id: "claude-opus-4-20250514",
     label: "Opus (Premium)",
     description: "Highest quality, slower and more expensive",
     multiplier: 3,
