@@ -4,22 +4,50 @@ import { sanitizeString, sanitizeUrl, isValidUUID } from "../lib/sanitize";
 
 const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY;
 
+function tryRepairJson(input: string): string {
+  // Repair truncated JSON: balance braces/brackets, drop trailing comma + partial token.
+  let s = input.trim();
+  // Remove trailing partial string after last quote
+  const lastQuote = s.lastIndexOf('"');
+  const lastClose = Math.max(s.lastIndexOf("}"), s.lastIndexOf("]"));
+  if (lastClose < lastQuote) {
+    s = s.slice(0, lastQuote + 1);
+  }
+  // Drop trailing commas
+  s = s.replace(/,\s*$/, "");
+  // Count and balance brackets
+  let openCurly = 0, openSquare = 0, inStr = false, esc = false;
+  for (const c of s) {
+    if (esc) { esc = false; continue; }
+    if (c === "\\") { esc = true; continue; }
+    if (c === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (c === "{") openCurly++;
+    else if (c === "}") openCurly--;
+    else if (c === "[") openSquare++;
+    else if (c === "]") openSquare--;
+  }
+  if (inStr) s += '"';
+  while (openSquare-- > 0) s += "]";
+  while (openCurly-- > 0) s += "}";
+  return s;
+}
+
 function extractJson(raw: string): any | null {
   if (!raw) return null;
-  // Strip ```json ... ``` or ``` ... ``` fences
   const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  const candidate = (fenceMatch ? fenceMatch[1] : raw).trim();
-  try {
-    return JSON.parse(candidate);
-  } catch {
-    // Try to grab the first {...} block
-    const start = candidate.indexOf("{");
-    const end = candidate.lastIndexOf("}");
-    if (start >= 0 && end > start) {
-      try { return JSON.parse(candidate.slice(start, end + 1)); } catch {}
-    }
-    return null;
-  }
+  let candidate = (fenceMatch ? fenceMatch[1] : raw).trim();
+
+  try { return JSON.parse(candidate); } catch {}
+
+  const start = candidate.indexOf("{");
+  if (start >= 0) candidate = candidate.slice(start);
+
+  try { return JSON.parse(candidate); } catch {}
+
+  // Truncated response — try to repair
+  try { return JSON.parse(tryRepairJson(candidate)); } catch {}
+  return null;
 }
 
 async function callClaude(
@@ -279,19 +307,25 @@ export const handleReimagine: RequestHandler = async (req, res) => {
       return;
     }
 
-    const systemPrompt = `You are Morphic's Mobile UX Reimagination Engine. You do NOT improve web UI. You REINTERPRET web applications as native mobile experiences. Rules:
+    const systemPrompt = `You are Morphic's Mobile UX Reimagination Engine. You REINTERPRET web apps as native mobile experiences. Rules:
 - sidebar → bottom tabs
 - dashboards → card-based scroll layouts
 - complex forms → step-based flows
 - tables → scrollable list cards
 - modals → full-screen sheets
 
-For each page, generate 2 design options as structured layout trees. CRITICAL: Output ONLY a valid JSON object. No prose. No markdown. No code fences. Start your response with { and end with }.`;
+For each page, generate exactly 2 design options. Keep layouts COMPACT: max 4 top-level children per design, max 2 nesting levels deep, max 5 styles per element, no long descriptive text. Use simple hex colors. NO linear-gradient strings — use a solid backgroundColor.
 
-    // Trim large analysis to avoid truncation
-    const pages = (analysis?.pages || []).slice(0, 6);
-    const features = (analysis?.features || []).slice(0, 10);
-    const flows = (analysis?.userFlows || []).slice(0, 4);
+CRITICAL OUTPUT RULES:
+- Output ONLY one valid JSON object.
+- No prose, no markdown, no code fences.
+- Start with { and end with }.
+- Keep total response under 6000 tokens — be concise.`;
+
+    // Trim aggressively to keep response within token budget
+    const pages = (analysis?.pages || []).slice(0, 4);
+    const features = (analysis?.features || []).slice(0, 6);
+    const flows = (analysis?.userFlows || []).slice(0, 2);
 
     const userPrompt = `Reimagine this web app as a mobile-first experience.
 
@@ -330,7 +364,7 @@ Output ONLY this JSON shape (no extra text before or after):
   ]
 }`;
 
-    const result = await callClaude(systemPrompt, userPrompt, modelTier, 8192);
+    const result = await callClaude(systemPrompt, userPrompt, modelTier, 16000);
     const parsed = extractJson(result) ?? { designs: [] };
 
     if (!parsed.designs || parsed.designs.length === 0) {
