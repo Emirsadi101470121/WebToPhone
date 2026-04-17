@@ -150,14 +150,14 @@ export default function Project() {
         }),
       });
 
-      if (response.status === 402) {
-        const err = await response.json();
-        toast.error(err.error || "Not enough credits");
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        toast.error(err.error || (response.status === 402 ? "Not enough credits" : "Analysis failed. Please try again."));
         setCurrentStage(null);
         return;
       }
 
-      if (response.ok) {
+      {
         const data = await response.json();
         setAnalysis(data.analysis);
         const cost = modelTier === "haiku" ? 3 : modelTier === "opus" ? 15 : 5;
@@ -219,25 +219,31 @@ export default function Project() {
         }),
       });
 
-      if (response.status === 402) {
-        const err = await response.json();
-        toast.error(err.error || "Not enough credits");
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        toast.error(err.error || (response.status === 402 ? "Not enough credits" : "Design generation failed. Please try again."));
         setCurrentStage("interview");
-        setStageLoading(false);
+        await savePipelineState("interview", { analysis, validatedData, preferences: prefs });
         return;
       }
 
-      if (response.ok) {
-        const data = await response.json();
-        setDesigns(data.designs ?? []);
-        const cost = modelTier === "haiku" ? 5 : modelTier === "opus" ? 30 : 10;
-        toast.success(`Mobile UX reimagined - ${cost} credits used (${modelTier})`);
-        sendPipelineNotification("Designs Ready", `"${project.name}" mobile designs are ready for selection.`, id);
-        setCurrentStage("select");
-        await savePipelineState("select", { analysis, validatedData, preferences: prefs, designs: data.designs ?? [] });
+      const data = await response.json();
+      const designsList = data.designs ?? [];
+      if (designsList.length === 0) {
+        toast.error("AI returned no designs. Please try again.");
+        setCurrentStage("interview");
+        await savePipelineState("interview", { analysis, validatedData, preferences: prefs });
+        return;
       }
+      setDesigns(designsList);
+      const cost = modelTier === "haiku" ? 5 : modelTier === "opus" ? 30 : 10;
+      toast.success(`Mobile UX reimagined - ${cost} credits used (${modelTier})`);
+      sendPipelineNotification("Designs Ready", `"${project.name}" mobile designs are ready for selection.`, id);
+      setCurrentStage("select");
+      await savePipelineState("select", { analysis, validatedData, preferences: prefs, designs: designsList });
     } catch {
       toast.error("Design generation failed. Please try again.");
+      setCurrentStage("interview");
     } finally {
       setStageLoading(false);
     }
@@ -285,15 +291,15 @@ export default function Project() {
         }),
       });
 
-      if (response.status === 402) {
-        const err = await response.json();
-        toast.error(err.error || "Not enough credits");
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        toast.error(err.error || (response.status === 402 ? "Not enough credits" : "Conversion failed. Please try again."));
         setCurrentStage("builder");
         setStageLoading(false);
         return;
       }
 
-      if (response.ok) {
+      {
         const data = await response.json();
         setQaReport(data.qa ?? null);
         setCurrentStage("qa");
@@ -449,6 +455,23 @@ export default function Project() {
               <p className="mt-2 text-sm text-muted-foreground">
                 AI is redesigning your app with mobile-first UX patterns...
               </p>
+            </div>
+          )}
+
+          {currentStage === "reimagine" && !stageLoading && (
+            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-8 text-center">
+              <Sparkles className="mx-auto h-10 w-10 text-amber-400" />
+              <h2 className="mt-4 text-lg font-semibold">Reimagine paused</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                We didn't get a result back. You can retry the design step.
+              </p>
+              <Button
+                variant="outline"
+                className="mt-4"
+                onClick={() => setCurrentStage("interview")}
+              >
+                Back to Interview
+              </Button>
             </div>
           )}
 
