@@ -174,20 +174,34 @@ export default function Project() {
     }
   };
 
+  const savePreferences = async (patch: Record<string, any>) => {
+    if (!project || !user) return;
+    try {
+      const { data: existing } = await supabase
+        .from("user_preferences")
+        .select("id")
+        .eq("project_id", project.id)
+        .maybeSingle();
+
+      if (existing) {
+        await supabase.from("user_preferences").update(patch).eq("project_id", project.id);
+      } else {
+        await supabase.from("user_preferences").insert({
+          project_id: project.id,
+          user_id: user.id,
+          ...patch,
+        });
+      }
+    } catch {
+      // Preference save is best-effort
+    }
+  };
+
   const handleValidationConfirm = async (data: any) => {
     setValidatedData(data);
     setCurrentStage("interview");
     await savePipelineState("interview", { analysis, validatedData: data });
-
-    try {
-      await supabase.from("user_preferences").upsert({
-        project_id: project!.id,
-        user_id: user!.id,
-        custom_notes: data.appDescription,
-      }, { onConflict: "project_id" });
-    } catch {
-      // Preference save is best-effort
-    }
+    await savePreferences({ custom_notes: data.appDescription });
   };
 
   const handleDesignInterviewSubmit = async (prefs: any) => {
@@ -196,14 +210,12 @@ export default function Project() {
     setStageLoading(true);
 
     try {
-      await supabase.from("user_preferences").upsert({
-        project_id: project!.id,
-        user_id: user!.id,
+      await savePreferences({
         design_style: prefs.style,
         target_audience: prefs.targetAudience,
         theme: prefs.theme === "dark" ? "dark" : "light",
         ux_complexity: prefs.uxPriority === "power" ? "advanced" : prefs.uxPriority === "simplicity" ? "simple" : "moderate",
-      }, { onConflict: "project_id" });
+      });
 
       const response = await fetchWithRetry("/api/reimagine", {
         method: "POST",
