@@ -286,18 +286,23 @@ export const handleReimagine: RequestHandler = async (req, res) => {
 - tables → scrollable list cards
 - modals → full-screen sheets
 
-For each page, generate 2 design options as structured layout trees. Return valid JSON only, no markdown.`;
+For each page, generate 2 design options as structured layout trees. CRITICAL: Output ONLY a valid JSON object. No prose. No markdown. No code fences. Start your response with { and end with }.`;
+
+    // Trim large analysis to avoid truncation
+    const pages = (analysis?.pages || []).slice(0, 6);
+    const features = (analysis?.features || []).slice(0, 10);
+    const flows = (analysis?.userFlows || []).slice(0, 4);
 
     const userPrompt = `Reimagine this web app as a mobile-first experience.
 
 App category (skeleton context only — design must be original, not a template): ${category || "unspecified"}
 App description: ${appDescription || "Web application"}
 Design preferences: ${JSON.stringify(preferences)}
-Detected pages: ${JSON.stringify(analysis?.pages || [])}
-Detected features: ${JSON.stringify(analysis?.features || [])}
-User flows: ${JSON.stringify(analysis?.userFlows || [])}
+Detected pages: ${JSON.stringify(pages)}
+Detected features: ${JSON.stringify(features)}
+User flows: ${JSON.stringify(flows)}
 
-Return JSON:
+Output ONLY this JSON shape (no extra text before or after):
 {
   "designs": [
     {
@@ -327,6 +332,15 @@ Return JSON:
 
     const result = await callClaude(systemPrompt, userPrompt, modelTier, 8192);
     const parsed = extractJson(result) ?? { designs: [] };
+
+    if (!parsed.designs || parsed.designs.length === 0) {
+      console.error("[reimagine] empty designs. Raw response (first 1000 chars):", result.slice(0, 1000));
+      if (userId && creditsCharged > 0) {
+        await refundCredits(userId, creditsCharged, "reimagine", projectIdForRefund);
+      }
+      res.status(500).json({ error: "AI returned no designs. Please try again." });
+      return;
+    }
 
     res.json({ success: true, modelUsed: modelTier, ...parsed });
   } catch (err) {
