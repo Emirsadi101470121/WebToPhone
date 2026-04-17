@@ -63,7 +63,7 @@ export async function deductCredits(
   try {
     const { data: credits } = await supabase
       .from("credits")
-      .select("balance")
+      .select("balance, lifetime_used")
       .eq("user_id", userId)
       .single();
 
@@ -82,7 +82,7 @@ export async function deductCredits(
       .from("credits")
       .update({
         balance: newBalance,
-        lifetime_used: credits.balance - newBalance,
+        lifetime_used: (credits.lifetime_used ?? 0) + cost,
         updated_at: new Date().toISOString(),
       })
       .eq("user_id", userId);
@@ -107,5 +107,43 @@ export async function deductCredits(
     return { success: true, remaining: newBalance, cost };
   } catch {
     return { success: false, remaining: 0, cost, error: "Credit deduction failed" };
+  }
+}
+
+export async function refundCredits(
+  userId: string,
+  cost: number,
+  operation: string,
+  projectId?: string,
+): Promise<void> {
+  if (!userId || cost <= 0) return;
+  try {
+    const supabase = getSupabaseAdmin();
+    const { data: credits } = await supabase
+      .from("credits")
+      .select("balance, lifetime_used")
+      .eq("user_id", userId)
+      .single();
+    if (!credits) return;
+
+    await supabase
+      .from("credits")
+      .update({
+        balance: credits.balance + cost,
+        lifetime_used: Math.max(0, (credits.lifetime_used ?? 0) - cost),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", userId);
+
+    await supabase.from("transactions").insert({
+      user_id: userId,
+      type: "refund",
+      amount: 0,
+      credits_amount: cost,
+      description: `${operation} refund (failed)`,
+      metadata: { operation, project_id: projectId },
+    });
+  } catch {
+    // Refund best-effort
   }
 }

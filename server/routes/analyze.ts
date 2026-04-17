@@ -1,5 +1,5 @@
 import { RequestHandler } from "express";
-import { deductCredits, getModelId, type ModelTier } from "./credits";
+import { deductCredits, refundCredits, getCreditCost, getModelId, type ModelTier } from "./credits";
 import { sanitizeString, sanitizeUrl, isValidUUID } from "../lib/sanitize";
 
 const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY;
@@ -68,13 +68,15 @@ function resolveModel(body: any, stage: string): ModelTier {
 }
 
 export const handleAnalyze: RequestHandler = async (req, res) => {
+  const userId = req.body.userId ? sanitizeString(req.body.userId) : undefined;
+  const modelTier = resolveModel(req.body, "analyze");
+  const projectIdForRefund = sanitizeString(req.body.projectId);
+  let creditsCharged = 0;
   try {
-    const projectId = sanitizeString(req.body.projectId);
+    const projectId = projectIdForRefund;
     const sourceType = sanitizeString(req.body.sourceType);
     const sourceUrl = req.body.sourceUrl ? sanitizeUrl(req.body.sourceUrl) : "";
     const category = req.body.category ? sanitizeString(req.body.category) : "";
-    const userId = req.body.userId ? sanitizeString(req.body.userId) : undefined;
-    const modelTier = resolveModel(req.body, "analyze");
 
     if (!projectId || !sourceType) {
       res.status(400).json({ error: "Missing required fields" });
@@ -87,6 +89,7 @@ export const handleAnalyze: RequestHandler = async (req, res) => {
         res.status(402).json({ error: creditResult.error, creditsRemaining: creditResult.remaining });
         return;
       }
+      creditsCharged = creditResult.cost;
     }
 
     if (!CLAUDE_API_KEY) {
@@ -148,20 +151,24 @@ Return JSON:
     res.json({ success: true, modelUsed: modelTier, ...parsed });
   } catch (err) {
     console.error("[analyze] failed:", err);
-    const message = err instanceof Error ? err.message : "Analysis failed";
-    res.status(500).json({ error: message });
+    if (userId && creditsCharged > 0) {
+      await refundCredits(userId, creditsCharged, "analyze", projectIdForRefund);
+    }
+    res.status(500).json({ error: "Analysis failed. Please try again. Your credits were refunded." });
   }
 };
 
 export const handleReimagine: RequestHandler = async (req, res) => {
+  const userId = req.body.userId ? sanitizeString(req.body.userId) : undefined;
+  const modelTier = resolveModel(req.body, "reimagine");
+  const projectIdForRefund = sanitizeString(req.body.projectId);
+  let creditsCharged = 0;
   try {
-    const projectId = sanitizeString(req.body.projectId);
+    const projectId = projectIdForRefund;
     const analysis = req.body.analysis;
     const preferences = req.body.preferences;
     const appDescription = sanitizeString(req.body.appDescription);
     const category = req.body.category ? sanitizeString(req.body.category) : "";
-    const userId = req.body.userId ? sanitizeString(req.body.userId) : undefined;
-    const modelTier = resolveModel(req.body, "reimagine");
 
     if (!projectId) {
       res.status(400).json({ error: "Missing project ID" });
@@ -174,6 +181,7 @@ export const handleReimagine: RequestHandler = async (req, res) => {
         res.status(402).json({ error: creditResult.error, creditsRemaining: creditResult.remaining });
         return;
       }
+      creditsCharged = creditResult.cost;
     }
 
     if (!CLAUDE_API_KEY) {
@@ -318,18 +326,22 @@ Return JSON:
     res.json({ success: true, modelUsed: modelTier, ...parsed });
   } catch (err) {
     console.error("[reimagine] failed:", err);
-    const message = err instanceof Error ? err.message : "Reimagination failed";
-    res.status(500).json({ error: message });
+    if (userId && creditsCharged > 0) {
+      await refundCredits(userId, creditsCharged, "reimagine", projectIdForRefund);
+    }
+    res.status(500).json({ error: "Design generation failed. Please try again. Your credits were refunded." });
   }
 };
 
 export const handleConvert: RequestHandler = async (req, res) => {
+  const userId = req.body.userId ? sanitizeString(req.body.userId) : undefined;
+  const modelTier = resolveModel(req.body, "convert");
+  const projectIdForRefund = sanitizeString(req.body.projectId);
+  let creditsCharged = 0;
   try {
-    const projectId = sanitizeString(req.body.projectId);
+    const projectId = projectIdForRefund;
     const selectedDesigns = req.body.selectedDesigns;
     const preferences = req.body.preferences;
-    const userId = req.body.userId ? sanitizeString(req.body.userId) : undefined;
-    const modelTier = resolveModel(req.body, "convert");
 
     if (!projectId) {
       res.status(400).json({ error: "Missing project ID" });
@@ -342,6 +354,7 @@ export const handleConvert: RequestHandler = async (req, res) => {
         res.status(402).json({ error: creditResult.error, creditsRemaining: creditResult.remaining });
         return;
       }
+      creditsCharged = creditResult.cost;
     }
 
     if (!CLAUDE_API_KEY) {
@@ -388,7 +401,10 @@ Return JSON:
 
     res.json({ success: true, modelUsed: modelTier, ...parsed });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Conversion failed";
-    res.status(500).json({ error: message });
+    console.error("[convert] failed:", err);
+    if (userId && creditsCharged > 0) {
+      await refundCredits(userId, creditsCharged, "convert", projectIdForRefund);
+    }
+    res.status(500).json({ error: "Conversion failed. Please try again. Your credits were refunded." });
   }
 };
