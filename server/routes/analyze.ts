@@ -4,6 +4,24 @@ import { sanitizeString, sanitizeUrl, isValidUUID } from "../lib/sanitize";
 
 const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY;
 
+function extractJson(raw: string): any | null {
+  if (!raw) return null;
+  // Strip ```json ... ``` or ``` ... ``` fences
+  const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = (fenceMatch ? fenceMatch[1] : raw).trim();
+  try {
+    return JSON.parse(candidate);
+  } catch {
+    // Try to grab the first {...} block
+    const start = candidate.indexOf("{");
+    const end = candidate.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      try { return JSON.parse(candidate.slice(start, end + 1)); } catch {}
+    }
+    return null;
+  }
+}
+
 async function callClaude(systemPrompt: string, userPrompt: string, modelTier: ModelTier = "sonnet"): Promise<string> {
   if (!CLAUDE_API_KEY) {
     throw new Error("CLAUDE_API_KEY not configured");
@@ -28,7 +46,8 @@ async function callClaude(systemPrompt: string, userPrompt: string, modelTier: M
 
   if (!response.ok) {
     const err = await response.text();
-    throw new Error(`Claude API error: ${err}`);
+    console.error(`[claude] ${response.status} (${modelId}):`, err);
+    throw new Error(`Claude API error (${response.status}): ${err.slice(0, 500)}`);
   }
 
   const data = await response.json();
@@ -122,15 +141,13 @@ Return JSON:
 }`;
 
     const result = await callClaude(systemPrompt, userPrompt, modelTier);
-    let parsed;
-    try {
-      parsed = JSON.parse(result);
-    } catch {
-      parsed = { analysis: { pages: [], features: [], userFlows: [], components: 0, routes: 0, apis: 0 } };
-    }
+    const parsed = extractJson(result) ?? {
+      analysis: { pages: [], features: [], userFlows: [], components: 0, routes: 0, apis: 0 },
+    };
 
     res.json({ success: true, modelUsed: modelTier, ...parsed });
   } catch (err) {
+    console.error("[analyze] failed:", err);
     const message = err instanceof Error ? err.message : "Analysis failed";
     res.status(500).json({ error: message });
   }
@@ -296,15 +313,11 @@ Return JSON:
 }`;
 
     const result = await callClaude(systemPrompt, userPrompt, modelTier);
-    let parsed;
-    try {
-      parsed = JSON.parse(result);
-    } catch {
-      parsed = { designs: [] };
-    }
+    const parsed = extractJson(result) ?? { designs: [] };
 
     res.json({ success: true, modelUsed: modelTier, ...parsed });
   } catch (err) {
+    console.error("[reimagine] failed:", err);
     const message = err instanceof Error ? err.message : "Reimagination failed";
     res.status(500).json({ error: message });
   }
@@ -368,12 +381,10 @@ Return JSON:
 }`;
 
     const result = await callClaude(systemPrompt, userPrompt, modelTier);
-    let parsed;
-    try {
-      parsed = JSON.parse(result);
-    } catch {
-      parsed = { files: [], qa: { uxIssues: [], securityNotes: [], accessibilityNotes: [] } };
-    }
+    const parsed = extractJson(result) ?? {
+      files: [],
+      qa: { uxIssues: [], securityNotes: [], accessibilityNotes: [] },
+    };
 
     res.json({ success: true, modelUsed: modelTier, ...parsed });
   } catch (err) {

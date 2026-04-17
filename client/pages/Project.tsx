@@ -83,7 +83,7 @@ export default function Project() {
     const load = async () => {
       if (!id) return;
       try {
-        const { data } = await supabase.from("projects").select("*").eq("id", id).single();
+        const { data } = await supabase.from("projects").select("*").eq("id", id).maybeSingle();
         if (data) {
           setProject(data);
           if (data.status === "completed") {
