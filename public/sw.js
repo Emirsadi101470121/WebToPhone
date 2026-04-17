@@ -1,4 +1,4 @@
-const CACHE_NAME = "morphic-v2";
+const CACHE_NAME = "morphic-v3";
 const STATIC_ASSETS = ["/", "/dashboard", "/login"];
 
 self.addEventListener("install", (event) => {
@@ -18,13 +18,19 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  if (event.request.url.includes("/api/")) return;
-
+  const url = event.request.url;
+  // Never cache API calls or HMR/dev assets
+  if (url.includes("/api/") || url.includes("/@vite") || url.includes("/@react-refresh") || url.includes("hot-update")) {
+    return;
+  }
+  // Network-first: always try fresh, fall back to cache only when offline.
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        const clone = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        if (response && response.ok && event.request.method === "GET") {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        }
         return response;
       })
       .catch(() => caches.match(event.request))

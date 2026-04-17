@@ -13,19 +13,19 @@ function getSupabaseAdmin() {
 // Model tiers
 export const AI_MODELS = {
   haiku: {
-    id: "claude-3-5-haiku-20241022",
+    id: "claude-haiku-4-5",
     label: "Haiku (Fast)",
     description: "Fastest responses, good for simple tasks",
     multiplier: 0.5,
   },
   sonnet: {
-    id: "claude-3-5-sonnet-20241022",
+    id: "claude-sonnet-4-5",
     label: "Sonnet (Balanced)",
     description: "Best balance of quality and speed",
     multiplier: 1,
   },
   opus: {
-    id: "claude-opus-4-20250514",
+    id: "claude-opus-4-5",
     label: "Opus (Premium)",
     description: "Highest quality, slower and more expensive",
     multiplier: 3,
