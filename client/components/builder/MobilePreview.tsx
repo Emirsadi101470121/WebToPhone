@@ -61,14 +61,18 @@ export default function MobilePreview({ nodes, selectedId, onSelect, device, onD
           </div>
 
           {/* Content */}
-          <div className="overflow-y-auto" style={{ height: d.height - 40 }}>
+          <div
+            className="overflow-y-auto"
+            style={{ height: d.height - 40, width: d.width }}
+          >
             {nodes.map((node) => (
-              <PreviewNode
-                key={node.id}
-                node={node}
-                selectedId={selectedId}
-                onSelect={onSelect}
-              />
+              <div key={node.id} style={{ width: "100%" }}>
+                <PreviewNode
+                  node={node}
+                  selectedId={selectedId}
+                  onSelect={onSelect}
+                />
+              </div>
             ))}
           </div>
         </div>
@@ -89,20 +93,49 @@ function PreviewNode({
   const isSelected = node.id === selectedId;
   const style = node.props?.style ?? {};
 
+  // Helper: numeric style → "Npx", string passes through
+  const px = (v: any) => (typeof v === "number" ? `${v}px` : v);
+  const isContainer = node.type === "View" || node.type === "ScrollView";
+
   const baseStyle: React.CSSProperties = {
     backgroundColor: style.backgroundColor,
     color: style.color ?? "#1a1a1a",
-    fontSize: style.fontSize ? `${style.fontSize}px` : undefined,
+    fontSize: px(style.fontSize),
     fontWeight: style.fontWeight,
-    padding: style.padding ? `${style.padding}px` : undefined,
-    margin: style.margin ? `${style.margin}px` : undefined,
-    borderRadius: style.borderRadius ? `${style.borderRadius}px` : undefined,
+    lineHeight: typeof style.lineHeight === "number" ? `${style.lineHeight}px` : style.lineHeight,
+    letterSpacing: px(style.letterSpacing),
+    // padding / shorthand + RN-style
+    padding: px(style.padding),
+    paddingTop: px(style.paddingTop ?? style.paddingVertical),
+    paddingBottom: px(style.paddingBottom ?? style.paddingVertical),
+    paddingLeft: px(style.paddingLeft ?? style.paddingHorizontal),
+    paddingRight: px(style.paddingRight ?? style.paddingHorizontal),
+    margin: px(style.margin),
+    marginTop: px(style.marginTop ?? style.marginVertical),
+    marginBottom: px(style.marginBottom ?? style.marginVertical),
+    marginLeft: px(style.marginLeft ?? style.marginHorizontal),
+    marginRight: px(style.marginRight ?? style.marginHorizontal),
+    width: px(style.width),
+    height: px(style.height),
+    minHeight: px(style.minHeight),
+    maxWidth: px(style.maxWidth ?? "100%"),
+    borderRadius: px(style.borderRadius),
+    borderWidth: px(style.borderWidth),
+    borderColor: style.borderColor,
+    borderStyle: style.borderWidth ? "solid" : undefined,
     textAlign: style.textAlign,
-    flexDirection: style.flexDirection,
+    opacity: style.opacity,
+    gap: px(style.gap),
+    flexDirection: style.flexDirection ?? (isContainer ? "column" : undefined),
     justifyContent: style.justifyContent,
     alignItems: style.alignItems,
-    display: node.type === "View" || node.type === "ScrollView" ? "flex" : undefined,
+    flex: style.flex,
+    flexWrap: style.flexWrap,
+    display: isContainer ? "flex" : undefined,
     position: "relative",
+    overflow: isContainer ? "hidden" : undefined,
+    boxSizing: "border-box",
+    wordBreak: "break-word",
   };
 
   const selectionOverlay = isSelected ? (

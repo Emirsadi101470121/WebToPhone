@@ -19,34 +19,43 @@ import { toast } from "sonner";
 
 // --- Tree helpers ---
 
-function buildTreeFromSession(componentTree: any[]): TreeNode[] {
+// Convert one AI-generated layout node to a TreeNode the builder understands.
+function aiLayoutToTreeNode(layout: any, idPath: string): TreeNode {
+  if (!layout || typeof layout !== "object") {
+    return { id: idPath, type: "Text", label: "Empty", props: { text: "", style: {} } };
+  }
+  const type = layout.type || "View";
+  const label = layout.label || type;
+  const style = layout.style && typeof layout.style === "object" ? layout.style : {};
+  // Text nodes: AI puts the text in `label`; surface it as `text` prop for the renderer.
+  const isText = type === "Text";
+  const props: Record<string, any> = { style };
+  if (isText) props.text = label;
+
+  const children = Array.isArray(layout.children)
+    ? layout.children.map((c: any, i: number) => aiLayoutToTreeNode(c, `${idPath}-${i}`))
+    : undefined;
+
+  return { id: idPath, type, label, props, children };
+}
+
+// Build one TreeNode per AI-designed page (each becomes its own screen).
+export function buildScreensFromSession(componentTree: any[]): TreeNode[] {
   if (!componentTree?.length) return [];
-  return [{
-    id: "root",
-    type: "ScrollView",
-    label: "Screen",
-    props: { style: { backgroundColor: "#ffffff", padding: 0 } },
-    children: componentTree.map((page: any, i: number) => ({
-      id: `page-${i}`,
-      type: "View",
-      label: page.pageName || `Page ${i + 1}`,
-      props: { style: { padding: 16, ...(i === 0 ? { backgroundColor: "#7c3aed" } : {}) } },
-      children: [
-        {
-          id: `page-${i}-title`,
-          type: "Text",
-          label: `${page.pageName || "Page"} Title`,
-          props: { text: page.pageName || `Page ${i + 1}`, style: { fontSize: 20, fontWeight: "bold", color: i === 0 ? "#ffffff" : "#1a1a1a" } },
-        },
-        {
-          id: `page-${i}-design`,
-          type: "Text",
-          label: "Design Label",
-          props: { text: `Design: ${page.designName || "Custom"}`, style: { fontSize: 12, color: i === 0 ? "#e0d4fc" : "#666", marginTop: 4 } },
-        },
-      ],
-    })),
-  }];
+  return componentTree.map((page: any, i: number) => {
+    const layout = page.layout && typeof page.layout === "object"
+      ? page.layout
+      : { type: "ScrollView", style: { backgroundColor: "#ffffff", padding: 16 }, children: [] };
+    const screen = aiLayoutToTreeNode(layout, `screen-${i}`);
+    screen.label = page.pageName || `Page ${i + 1}`;
+    return screen;
+  });
+}
+
+// Backwards-compat: returns the FIRST screen as the active tree.
+function buildTreeFromSession(componentTree: any[]): TreeNode[] {
+  const screens = buildScreensFromSession(componentTree);
+  return screens.length ? [screens[0]] : [];
 }
 
 const defaultTree: TreeNode[] = [
@@ -168,6 +177,8 @@ export default function Builder() {
   const [exportFormat, setExportFormat] = useState<"react-native" | "flutter" | "swiftui">("react-native");
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [device, setDevice] = useState<DeviceType>("iphone");
+  const [screens, setScreens] = useState<TreeNode[]>([]);
+  const [activeScreenIndex, setActiveScreenIndex] = useState(0);
 
   const pushHistory = useCallback((prev: TreeNode[]) => {
     setHistory((h) => [...h.slice(-50), prev]);
@@ -206,10 +217,12 @@ export default function Builder() {
           .limit(1)
           .maybeSingle();
         if (data?.component_tree?.length) {
-          const sessionTree = buildTreeFromSession(data.component_tree);
-          if (sessionTree.length) {
-            setTree(sessionTree);
-            toast.success("Builder loaded from your design selections");
+          const allScreens = buildScreensFromSession(data.component_tree);
+          if (allScreens.length) {
+            setScreens(allScreens);
+            setActiveScreenIndex(0);
+            setTree([allScreens[0]]);
+            toast.success(`Builder loaded ${allScreens.length} AI-designed screens`);
           }
         }
       } catch {
@@ -443,6 +456,29 @@ export default function Builder() {
 
         {/* Preview */}
         <div className="flex-1 overflow-auto bg-zinc-900/50">
+          {screens.length > 1 && (
+            <div className="flex flex-wrap items-center justify-center gap-2 border-b border-white/5 bg-zinc-900/40 px-4 py-2">
+              <span className="text-xs text-muted-foreground">Screens:</span>
+              {screens.map((s, i) => (
+                <button
+                  key={s.id}
+                  onClick={() => {
+                    setActiveScreenIndex(i);
+                    setTree([screens[i]]);
+                    setSelectedNode(null);
+                  }}
+                  className={cn(
+                    "rounded-md border px-2.5 py-1 text-xs transition-colors",
+                    i === activeScreenIndex
+                      ? "border-violet-500 bg-violet-500/15 text-violet-200"
+                      : "border-white/10 text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          )}
           <MobilePreview
             nodes={tree}
             selectedId={selectedNode?.id ?? null}
