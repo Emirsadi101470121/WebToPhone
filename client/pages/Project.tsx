@@ -210,8 +210,14 @@ export default function Project() {
     setStageLoading(true);
 
     try {
+      const ALLOWED_STYLES = ["modern", "minimal", "luxury", "playful", "corporate"];
+      const styleAlias: Record<string, string> = { premium: "luxury", bold: "modern", clean: "minimal" };
+      const normalizedStyle = ALLOWED_STYLES.includes(prefs.style)
+        ? prefs.style
+        : (styleAlias[prefs.style] ?? "modern");
+
       await savePreferences({
-        design_style: prefs.style,
+        design_style: normalizedStyle,
         target_audience: prefs.targetAudience,
         theme: prefs.theme === "dark" ? "dark" : "light",
         ux_complexity: prefs.uxPriority === "power" ? "advanced" : prefs.uxPriority === "simplicity" ? "simple" : "moderate",

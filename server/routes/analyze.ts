@@ -22,7 +22,12 @@ function extractJson(raw: string): any | null {
   }
 }
 
-async function callClaude(systemPrompt: string, userPrompt: string, modelTier: ModelTier = "sonnet"): Promise<string> {
+async function callClaude(
+  systemPrompt: string,
+  userPrompt: string,
+  modelTier: ModelTier = "sonnet",
+  maxTokens: number = 4096,
+): Promise<string> {
   if (!CLAUDE_API_KEY) {
     throw new Error("CLAUDE_API_KEY not configured");
   }
@@ -38,7 +43,7 @@ async function callClaude(systemPrompt: string, userPrompt: string, modelTier: M
     },
     body: JSON.stringify({
       model: modelId,
-      max_tokens: 4096,
+      max_tokens: maxTokens,
       system: systemPrompt,
       messages: [{ role: "user", content: userPrompt }],
     }),
@@ -320,7 +325,7 @@ Return JSON:
   ]
 }`;
 
-    const result = await callClaude(systemPrompt, userPrompt, modelTier);
+    const result = await callClaude(systemPrompt, userPrompt, modelTier, 8192);
     const parsed = extractJson(result) ?? { designs: [] };
 
     res.json({ success: true, modelUsed: modelTier, ...parsed });
@@ -393,7 +398,7 @@ Return JSON:
   }
 }`;
 
-    const result = await callClaude(systemPrompt, userPrompt, modelTier);
+    const result = await callClaude(systemPrompt, userPrompt, modelTier, 8192);
     const parsed = extractJson(result) ?? {
       files: [],
       qa: { uxIssues: [], securityNotes: [], accessibilityNotes: [] },
