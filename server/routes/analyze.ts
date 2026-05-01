@@ -58,8 +58,18 @@ function tryRepairJson(input: string): string {
 
 function extractJson(raw: string): any | null {
   if (!raw) return null;
-  const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  let candidate = (fenceMatch ? fenceMatch[1] : raw).trim();
+  let candidate = raw.trim();
+
+  // Strip closed code fences if present.
+  const fenceMatch = candidate.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenceMatch) {
+    candidate = fenceMatch[1].trim();
+  } else {
+    // Strip a leading unclosed fence (truncated response).
+    candidate = candidate.replace(/^```(?:json)?\s*/i, "");
+    // Strip a trailing unclosed fence start.
+    candidate = candidate.replace(/```\s*$/i, "");
+  }
 
   try { return JSON.parse(candidate); } catch {}
 
@@ -68,7 +78,7 @@ function extractJson(raw: string): any | null {
 
   try { return JSON.parse(candidate); } catch {}
 
-  // Truncated response — try to repair
+  // Truncated response — try to repair.
   try { return JSON.parse(tryRepairJson(candidate)); } catch {}
   return null;
 }
@@ -330,74 +340,48 @@ export const handleReimagine: RequestHandler = async (req, res) => {
       return;
     }
 
-    const systemPrompt = `You are Morphic's Mobile UX Reimagination Engine. You design REAL, DETAILED, USABLE mobile screens — not skeletons.
+    const systemPrompt = `You are Morphic's Mobile UX Reimagination Engine. You produce concise, complete mobile screen layouts as JSON.
 
-Web → Mobile reinterpretation rules:
-- sidebar → bottom tab bar (always include one as the last child of ScrollView)
-- dashboards → card-based scroll layouts with at least 4-6 content blocks
-- complex forms → step-based flows with progress indicator
-- tables → scrollable list cards with avatars, titles, subtitles, metadata
-- modals → full-screen sheets with handle and close button
+Web → Mobile reinterpretation:
+- sidebar → bottom tab bar at the END of the screen (4 tabs)
+- dashboard → card-stack scroll
+- form → step flow
+- table → list cards
+- modal → full-screen sheet
 
-DESIGN DENSITY REQUIREMENTS (CRITICAL — DO NOT SKIMP):
-- Each screen MUST contain at minimum: a status bar / app header, a hero or section heading, AT LEAST 4 distinct content blocks (cards, list items, tiles, etc.), and a bottom navigation bar with 4-5 labeled tabs.
-- Use REALISTIC content for the app's category — actual product names with prices, real-sounding user names, dates, prices, ratings, statuses, badges, button labels. NEVER use "Lorem ipsum", "Card", "Item 1", or generic placeholders.
-- Nesting depth up to 4 levels is fine. 8-15 total elements per screen is the target.
-- Always include sizes for cards (height or minHeight), padding, gaps, borderRadius, and color fields.
-- Use a coherent color palette derived from the user's preferences. Use simple hex colors. NO gradients.
-- Layouts should be VISUALLY RICH — set backgroundColor on cards, fontWeight on titles, color contrast for subtitles, and use Image type for thumbnails (with style.width, style.height, style.backgroundColor as a placeholder color).
+EVERY screen MUST contain (in order, no more, no less):
+1. Header View (height ~56) with screen title Text + a small icon-View on the right.
+2. A Hero card View (minHeight ~100) with 1 title Text + 1 subtitle Text + optional Image placeholder.
+3. Exactly 4 list-item Views in a "Content" container, each with: Image placeholder (40x40), title Text, subtitle Text.
+4. Bottom Nav View (height ~64) with exactly 4 tab cells, each: small icon-View (24x24) + label Text.
 
-Element types allowed: ScrollView, View, Text, Image. Use "label" for the visible text on Text elements, and as the descriptive name on View/Image.
+CONTENT RULES:
+- Use REALISTIC text for the app category (product names, prices, ratings, dates, names). NO "Lorem", "Item 1", "Card".
+- Keep every "label" text under 40 characters.
+- Use only essential style fields per element: backgroundColor, padding (or paddingHorizontal/Vertical), borderRadius, fontSize, fontWeight, color, gap, height/minHeight, width. NO gradients, NO shadows, NO transforms.
+- Hex colors only. Keep palette to ~5 colors total.
 
-For each page, generate exactly 2 design options with DIFFERENT visual approaches (e.g. light vs dark, card-stack vs feed, hero-led vs list-led).
+OUTPUT RULES (CRITICAL):
+- Output ONLY a JSON object. NO markdown, NO code fences, NO commentary.
+- Start with { and end with }. Nothing before or after.
+- Keep total output under 7000 tokens. Be terse but complete.`;
 
-CRITICAL OUTPUT RULES:
-- Output ONLY one valid JSON object. No prose, no markdown, no code fences.
-- Start with { and end with }.
-- Keep response under 14000 tokens but DO produce dense, complete screens.`;
+    // Drastically scoped: 2 pages × 2 options must fit under 7000 tokens.
+    const pages = (analysis?.pages || []).slice(0, 2).map((p: any) => ({
+      name: p.name,
+      type: p.type,
+    }));
+    const features = (analysis?.features || []).slice(0, 4);
 
-    // Trim to keep within token budget. 2 pages × 2 options × dense layout fits within 16k tokens.
-    const pages = (analysis?.pages || []).slice(0, 2);
-    const features = (analysis?.features || []).slice(0, 5);
-    const flows = (analysis?.userFlows || []).slice(0, 2);
+    const userPrompt = `Generate mobile redesigns. App category: ${category || "general"}. ${appDescription ? `Brief: ${appDescription.slice(0, 200)}.` : ""}
+Style: ${preferences?.style || "modern"}. Theme: ${preferences?.theme || "light"}. Palette: ${(preferences?.colorPalette || []).slice(0, 4).join(", ") || "designer choice"}.
+Pages: ${JSON.stringify(pages)}
+Features: ${JSON.stringify(features)}
 
-    const userPrompt = `Reimagine this web app as a polished, content-rich mobile experience. Generate REAL designs that look like a finished app, not wireframes.
+Generate 2 design options for EACH page (4 designs total). Two options per page must differ visually (e.g. light vs dark, or list vs grid).
 
-App category: ${category || "unspecified"}
-App description: ${appDescription || "Web application"}
-Design preferences: ${JSON.stringify(preferences)}
-Detected pages: ${JSON.stringify(pages)}
-Detected features: ${JSON.stringify(features)}
-User flows: ${JSON.stringify(flows)}
-
-Each screen must include:
-1. A header (View) with the screen title and an action icon-area (use a small View with backgroundColor as the icon placeholder).
-2. A hero or summary card with realistic content for the category.
-3. At least 4 list/grid/feed items with realistic names, prices, dates, ratings, or statuses appropriate to the category.
-4. A bottom navigation bar (View at end) with 4-5 tab cells, each containing an icon-View and a label Text.
-
-Use coherent colors from the user's preferences, set explicit padding/gap/borderRadius/fontSize on every element, and give cards a minHeight (e.g. 80-120) so they render visibly.
-
-Output ONLY this exact JSON shape:
-{
-  "designs": [
-    {
-      "pageName": "PageName",
-      "options": [
-        {
-          "id": "uuid-string",
-          "name": "Design Name",
-          "description": "What this mobile approach feels like",
-          "layout": {
-            "type": "ScrollView",
-            "style": { "backgroundColor": "#hex", "padding": 0 },
-            "children": [ /* dense, realistic content blocks */ ]
-          }
-        }
-      ]
-    }
-  ]
-}`;
+Output JSON only, this exact shape:
+{"designs":[{"pageName":"X","options":[{"id":"<uuid>","name":"<short>","description":"<one sentence>","layout":{"type":"ScrollView","style":{"backgroundColor":"#hex","padding":0},"children":[...]}}]}]}`;
 
     const result = await callClaude(systemPrompt, userPrompt, modelTier, 16000);
     let parsed: any = extractJson(result) ?? { designs: [] };
