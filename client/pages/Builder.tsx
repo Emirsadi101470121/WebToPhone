@@ -25,12 +25,17 @@ function aiLayoutToTreeNode(layout: any, idPath: string): TreeNode {
     return { id: idPath, type: "Text", label: "Empty", props: { text: "", style: {} } };
   }
   const type = layout.type || "View";
-  const label = layout.label || type;
   const style = layout.style && typeof layout.style === "object" ? layout.style : {};
-  // Text nodes: AI puts the text in `label`; surface it as `text` prop for the renderer.
   const isText = type === "Text";
+
+  // Text nodes: prefer `text` then `label`. NEVER fall back to the type name.
+  const rawText = (layout.text ?? layout.label ?? "").toString();
+  const text = isText ? rawText : "";
+  // Tree node label: use AI label, then text, then type (only for non-Text containers).
+  const label = (layout.label ?? (isText ? rawText : type)).toString() || type;
+
   const props: Record<string, any> = { style };
-  if (isText) props.text = label;
+  if (isText) props.text = text;
 
   const children = Array.isArray(layout.children)
     ? layout.children.map((c: any, i: number) => aiLayoutToTreeNode(c, `${idPath}-${i}`))

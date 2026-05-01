@@ -224,6 +224,120 @@ Return JSON:
   }
 };
 
+// Fill empty/placeholder text labels with category-aware fallbacks.
+function fillRealisticContent(node: any, category: string, idx = { i: 0 }): any {
+  if (!node || typeof node !== "object") return node;
+  const placeholders = realisticTextFor(category);
+  if (node.type === "Text") {
+    const current = (node.label ?? node.text ?? "").toString().trim();
+    const isPlaceholder = !current || /^(text|label|item\s*\d*|card|placeholder|lorem)/i.test(current);
+    if (isPlaceholder) {
+      node.label = placeholders[idx.i % placeholders.length];
+      idx.i++;
+    } else {
+      node.label = current;
+    }
+  }
+  if (Array.isArray(node.children)) {
+    node.children.forEach((c: any) => fillRealisticContent(c, category, idx));
+  }
+  return node;
+}
+
+function realisticTextFor(category: string): string[] {
+  const c = (category || "").toLowerCase();
+  if (c.includes("commerce") || c.includes("shop") || c.includes("market")) {
+    return ["Wireless Headphones", "$129.00", "Free shipping", "Smart Watch Pro", "$249.00", "In stock", "Cotton T-Shirt", "$29.00", "4.8 ★", "Leather Wallet", "$59.00", "New arrival", "Home", "Search", "Cart", "Profile"];
+  }
+  if (c.includes("social") || c.includes("chat") || c.includes("message")) {
+    return ["Sarah Johnson", "Hey, how are you?", "2m ago", "Mike Chen", "See you tomorrow!", "1h ago", "Emma Davis", "Sounds great 👍", "3h ago", "Alex Rivera", "Sent a photo", "Yesterday", "Chats", "Calls", "Stories", "Profile"];
+  }
+  if (c.includes("food") || c.includes("restaurant") || c.includes("delivery")) {
+    return ["Margherita Pizza", "$14.99 · 25 min", "★ 4.7", "Sushi Combo", "$22.50 · 30 min", "★ 4.9", "Burger Deluxe", "$11.50 · 20 min", "★ 4.6", "Pad Thai", "$13.00 · 35 min", "★ 4.8", "Home", "Search", "Orders", "Account"];
+  }
+  if (c.includes("fitness") || c.includes("health") || c.includes("workout")) {
+    return ["Morning Run", "5.2 km · 28 min", "Active", "Yoga Flow", "20 min · Beginner", "Today", "HIIT Workout", "15 min · Intense", "Saved", "Steps Today", "8,432 / 10,000", "Goal", "Home", "Plans", "Stats", "Profile"];
+  }
+  if (c.includes("finance") || c.includes("bank") || c.includes("wallet")) {
+    return ["Checking Account", "$4,238.50", "+$120 today", "Savings", "$12,450.00", "+0.5%", "Recent Transfer", "−$45.00 · Coffee", "Yesterday", "Bill Payment", "−$120.00 · Internet", "2 days ago", "Home", "Cards", "Pay", "More"];
+  }
+  if (c.includes("travel") || c.includes("hotel") || c.includes("flight")) {
+    return ["Bali, Indonesia", "From $589 · 7 nights", "★ 4.9", "Tokyo, Japan", "From $899 · 5 nights", "★ 4.8", "Paris, France", "From $749 · 4 nights", "★ 4.7", "Santorini", "From $679 · 6 nights", "★ 4.9", "Explore", "Trips", "Saved", "Profile"];
+  }
+  if (c.includes("news") || c.includes("blog") || c.includes("article")) {
+    return ["Tech Industry Updates", "5 min read · Today", "Trending", "Climate Report 2024", "8 min read · 2h ago", "Featured", "Sports Highlights", "3 min read · 4h ago", "Live", "Market Analysis", "6 min read · 1d ago", "Editor's pick", "Home", "Topics", "Saved", "Profile"];
+  }
+  // Generic professional fallback
+  return ["Welcome back", "Continue where you left off", "View all", "Recent Activity", "Updated 5 min ago", "Open", "Quick Actions", "Tap to explore", "Go", "Notifications", "3 new updates", "Review", "Home", "Browse", "Activity", "Profile"];
+}
+
+async function generateDesignsPerPage(opts: {
+  pages: any[];
+  features: any[];
+  palette: string[];
+  style: string;
+  theme: string;
+  category: string;
+  appDescription: string;
+  modelTier: ModelTier;
+}): Promise<any[]> {
+  const { pages, features, palette, style, theme, category, appDescription, modelTier } = opts;
+
+  const pageList = pages.length > 0 ? pages : [
+    { name: "Home", type: "main" },
+    { name: "Profile", type: "profile" },
+  ];
+
+  const systemPrompt = `You design ONE polished mobile screen as JSON. Return exactly 2 design options for the requested page.
+
+Element types: ScrollView, View, Text, Image. EVERY Text MUST have a "label" field with REAL human-readable content (e.g. "Wireless Headphones", "$129.00", "★ 4.8") — NEVER the words "Text", "Label", "Item", or empty string.
+
+REQUIRED structure per screen (in this order):
+1. Header View (height 56, padding 16): a title Text + a small icon View (28x28) on the right.
+2. Hero card View (minHeight 120, borderRadius 16, padding 20): title Text + subtitle Text.
+3. Content View (gap 12, padding 16) containing 4 list-item Views. Each item: row layout with Image (48x48 colored placeholder) + a column View (gap 4) containing title Text + subtitle Text.
+4. Bottom Nav View (height 64, padding 12) with 4 tab cells. Each tab: icon View (24x24) + label Text (fontSize 11).
+
+STYLE FIELDS allowed: backgroundColor, color, padding, paddingHorizontal, paddingVertical, paddingTop, paddingBottom, borderRadius, fontSize, fontWeight, gap, height, minHeight, width, flexDirection, alignItems, justifyContent. NO gradients, shadows, transforms.
+
+OUTPUT: ONLY valid JSON. No markdown. No fences. No commentary.`;
+
+  const promises = pageList.slice(0, 4).map(async (page: any) => {
+    const userPrompt = `Design the "${page.name}" screen (${page.type || "main"}) for a ${category || "mobile"} app.
+Brief: ${(appDescription || "").slice(0, 150)}
+Visual style: ${style}. Theme: ${theme}. Palette hint: ${palette.join(", ") || "designer's choice"}.
+Relevant features: ${features.slice(0, 4).join(", ")}.
+
+Return EXACTLY this JSON shape (2 options, visually different):
+{"options":[
+  {"id":"opt-a","name":"<2-3 word name>","description":"<short>","layout":{"type":"ScrollView","style":{"backgroundColor":"#hex","padding":0},"children":[/*header, hero, content, bottom nav with REAL labels*/]}},
+  {"id":"opt-b","name":"<2-3 word name>","description":"<short>","layout":{"type":"ScrollView","style":{"backgroundColor":"#hex","padding":0},"children":[/*alternative visual approach*/]}}
+]}`;
+
+    try {
+      const raw = await callClaude(systemPrompt, userPrompt, modelTier, 8000);
+      const parsed = extractJson(raw);
+      if (!parsed?.options?.length) {
+        console.warn(`[reimagine] no options for page ${page.name}`);
+        return null;
+      }
+      const options = parsed.options.map((opt: any) => ({
+        id: opt.id || crypto.randomUUID(),
+        name: opt.name || `${page.name} Design`,
+        description: opt.description || `Mobile design for ${page.name}`,
+        layout: fillRealisticContent(opt.layout, category),
+      }));
+      return { pageName: page.name, options };
+    } catch (e) {
+      console.error(`[reimagine] page "${page.name}" failed:`, e);
+      return null;
+    }
+  });
+
+  const results = await Promise.all(promises);
+  return results.filter((r): r is any => r !== null);
+}
+
 export const handleReimagine: RequestHandler = async (req, res) => {
   const userId = req.body.userId ? sanitizeString(req.body.userId) : undefined;
   const modelTier = resolveModel(req.body, "reimagine");
@@ -340,66 +454,25 @@ export const handleReimagine: RequestHandler = async (req, res) => {
       return;
     }
 
-    const systemPrompt = `You are Morphic's Mobile UX Reimagination Engine. You produce concise, complete mobile screen layouts as JSON.
+    // Generate ONE page at a time in parallel — avoids any single response being truncated.
+    const pages = (analysis?.pages || []).slice(0, 4);
+    const features = (analysis?.features || []).slice(0, 6);
+    const palette = (preferences?.colorPalette || []).slice(0, 5);
+    const style = preferences?.style || "modern";
+    const theme = preferences?.theme || "light";
 
-Web → Mobile reinterpretation:
-- sidebar → bottom tab bar at the END of the screen (4 tabs)
-- dashboard → card-stack scroll
-- form → step flow
-- table → list cards
-- modal → full-screen sheet
+    const designs = await generateDesignsPerPage({
+      pages,
+      features,
+      palette,
+      style,
+      theme,
+      category,
+      appDescription,
+      modelTier,
+    });
 
-EVERY screen MUST contain (in order, no more, no less):
-1. Header View (height ~56) with screen title Text + a small icon-View on the right.
-2. A Hero card View (minHeight ~100) with 1 title Text + 1 subtitle Text + optional Image placeholder.
-3. Exactly 4 list-item Views in a "Content" container, each with: Image placeholder (40x40), title Text, subtitle Text.
-4. Bottom Nav View (height ~64) with exactly 4 tab cells, each: small icon-View (24x24) + label Text.
-
-CONTENT RULES:
-- Use REALISTIC text for the app category (product names, prices, ratings, dates, names). NO "Lorem", "Item 1", "Card".
-- Keep every "label" text under 40 characters.
-- Use only essential style fields per element: backgroundColor, padding (or paddingHorizontal/Vertical), borderRadius, fontSize, fontWeight, color, gap, height/minHeight, width. NO gradients, NO shadows, NO transforms.
-- Hex colors only. Keep palette to ~5 colors total.
-
-OUTPUT RULES (CRITICAL):
-- Output ONLY a JSON object. NO markdown, NO code fences, NO commentary.
-- Start with { and end with }. Nothing before or after.
-- Keep total output under 7000 tokens. Be terse but complete.`;
-
-    // Drastically scoped: 2 pages × 2 options must fit under 7000 tokens.
-    const pages = (analysis?.pages || []).slice(0, 2).map((p: any) => ({
-      name: p.name,
-      type: p.type,
-    }));
-    const features = (analysis?.features || []).slice(0, 4);
-
-    const userPrompt = `Generate mobile redesigns. App category: ${category || "general"}. ${appDescription ? `Brief: ${appDescription.slice(0, 200)}.` : ""}
-Style: ${preferences?.style || "modern"}. Theme: ${preferences?.theme || "light"}. Palette: ${(preferences?.colorPalette || []).slice(0, 4).join(", ") || "designer choice"}.
-Pages: ${JSON.stringify(pages)}
-Features: ${JSON.stringify(features)}
-
-Generate 2 design options for EACH page (4 designs total). Two options per page must differ visually (e.g. light vs dark, or list vs grid).
-
-Output JSON only, this exact shape:
-{"designs":[{"pageName":"X","options":[{"id":"<uuid>","name":"<short>","description":"<one sentence>","layout":{"type":"ScrollView","style":{"backgroundColor":"#hex","padding":0},"children":[...]}}]}]}`;
-
-    const result = await callClaude(systemPrompt, userPrompt, modelTier, 16000);
-    let parsed: any = extractJson(result) ?? { designs: [] };
-
-    // Salvage: if parse failed but raw has page designs, try to keep partial valid pages.
-    if ((!parsed.designs || parsed.designs.length === 0) && result) {
-      const matches = result.match(/\{\s*"pageName"\s*:[\s\S]*?(?=,?\s*\{\s*"pageName"|\]\s*\}|$)/g);
-      if (matches) {
-        const salvaged: any[] = [];
-        for (const m of matches) {
-          try { salvaged.push(JSON.parse(tryRepairJson(m))); } catch {}
-        }
-        if (salvaged.length > 0) parsed = { designs: salvaged };
-      }
-    }
-
-    if (!parsed.designs || parsed.designs.length === 0) {
-      console.error("[reimagine] empty designs. Raw response length:", result.length, "first 500:", result.slice(0, 500), "last 500:", result.slice(-500));
+    if (designs.length === 0) {
       if (userId && creditsCharged > 0) {
         await refundCredits(userId, creditsCharged, "reimagine", projectIdForRefund);
       }
@@ -407,7 +480,7 @@ Output JSON only, this exact shape:
       return;
     }
 
-    res.json({ success: true, modelUsed: modelTier, ...parsed });
+    res.json({ success: true, modelUsed: modelTier, designs });
   } catch (err) {
     console.error("[reimagine] failed:", err);
     if (userId && creditsCharged > 0) {
