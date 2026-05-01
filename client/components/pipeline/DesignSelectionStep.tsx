@@ -27,31 +27,57 @@ interface Props {
   onConfirm: (selections: Record<string, DesignOption>) => void;
 }
 
-function MiniPreview({ layout }: { layout: LayoutNode }) {
-  const style: React.CSSProperties = {
-    backgroundColor: layout.style?.backgroundColor,
-    padding: layout.style?.padding ? `${Math.min(layout.style.padding / 2, 8)}px` : undefined,
-    borderRadius: layout.style?.borderRadius ? `${Math.min(layout.style.borderRadius / 2, 8)}px` : undefined,
-    display: layout.type === "View" || layout.type === "ScrollView" ? "flex" : undefined,
-    flexDirection: (layout.style?.flexDirection as any) ?? "column",
-    alignItems: layout.style?.alignItems,
-    gap: "2px",
-  };
+function scalePx(v: any, factor = 0.4, max = 14): string | undefined {
+  if (typeof v !== "number") return undefined;
+  return `${Math.max(1, Math.min(v * factor, max))}px`;
+}
 
+function MiniPreview({ layout }: { layout: LayoutNode }) {
   if (layout.type === "Text") {
-    const fontSize = Math.min((layout.style?.fontSize ?? 12) / 3, 8);
+    const fontSize = Math.max(5, Math.min((layout.style?.fontSize ?? 12) * 0.42, 9));
     return (
       <div style={{
         fontSize: `${fontSize}px`,
         fontWeight: layout.style?.fontWeight,
         color: layout.style?.color ?? "#333",
         padding: "1px 2px",
-        lineHeight: 1.2,
+        lineHeight: 1.15,
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
       }}>
         {layout.label ?? ""}
       </div>
     );
   }
+
+  if (layout.type === "Image") {
+    return (
+      <div style={{
+        backgroundColor: layout.style?.backgroundColor ?? "#d4d4d8",
+        width: scalePx(layout.style?.width) ?? "100%",
+        height: scalePx(layout.style?.height) ?? "16px",
+        borderRadius: scalePx(layout.style?.borderRadius, 0.5, 6),
+        flexShrink: 0,
+      }} />
+    );
+  }
+
+  const minH = layout.style?.minHeight ?? layout.style?.height;
+  const style: React.CSSProperties = {
+    backgroundColor: layout.style?.backgroundColor,
+    padding: scalePx(layout.style?.padding ?? layout.style?.paddingHorizontal, 0.4, 8),
+    paddingTop: scalePx(layout.style?.paddingTop ?? layout.style?.paddingVertical, 0.4, 8),
+    paddingBottom: scalePx(layout.style?.paddingBottom ?? layout.style?.paddingVertical, 0.4, 8),
+    borderRadius: scalePx(layout.style?.borderRadius, 0.5, 8),
+    display: "flex",
+    flexDirection: (layout.style?.flexDirection as any) ?? "column",
+    alignItems: layout.style?.alignItems,
+    justifyContent: layout.style?.justifyContent,
+    gap: scalePx(layout.style?.gap, 0.4, 4) ?? "2px",
+    minHeight: scalePx(minH, 0.4, 60),
+    flexShrink: 0,
+  };
 
   return (
     <div style={style}>

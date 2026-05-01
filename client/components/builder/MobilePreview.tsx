@@ -163,11 +163,17 @@ function PreviewNode({
     return (
       <div
         onClick={(e) => { e.stopPropagation(); onSelect(node); }}
-        className="cursor-pointer bg-zinc-200 transition-all hover:outline hover:outline-1 hover:outline-violet-400/30"
-        style={{ ...baseStyle, height: style.height ?? 120, display: "flex", alignItems: "center", justifyContent: "center" }}
+        className="cursor-pointer transition-all hover:outline hover:outline-1 hover:outline-violet-400/30"
+        style={{
+          ...baseStyle,
+          backgroundColor: style.backgroundColor ?? "#e4e4e7",
+          height: px(style.height) ?? 120,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
       >
         {selectionOverlay}
-        <span className="text-xs text-zinc-400">Image</span>
       </div>
     );
   }
