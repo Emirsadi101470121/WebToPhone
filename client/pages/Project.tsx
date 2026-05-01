@@ -223,7 +223,8 @@ export default function Project() {
         ux_complexity: prefs.uxPriority === "power" ? "advanced" : prefs.uxPriority === "simplicity" ? "simple" : "moderate",
       });
 
-      const response = await fetchWithRetry("/api/reimagine", {
+      // No retry on reimagine — each retry re-charges credits and waits 60-90s for Claude.
+      const response = await fetch("/api/reimagine", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

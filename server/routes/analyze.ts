@@ -376,7 +376,7 @@ Output ONLY this exact JSON shape:
   ]
 }`;
 
-    const result = await callClaude(systemPrompt, userPrompt, modelTier, 20000);
+    const result = await callClaude(systemPrompt, userPrompt, modelTier, 12000);
     const parsed = extractJson(result) ?? { designs: [] };
 
     if (!parsed.designs || parsed.designs.length === 0) {
