@@ -62,8 +62,9 @@ export default function MobilePreview({ nodes, selectedId, onSelect, device, onD
 
           {/* Content */}
           <div
-            className="overflow-y-auto"
+            className="morphic-preview-root overflow-y-auto"
             style={{ height: d.height - 40, width: d.width }}
+            key={nodes.map((n) => n.id).join("|")}
           >
             {nodes.map((node) => (
               <div key={node.id} style={{ width: "100%" }}>
@@ -99,11 +100,13 @@ function PreviewNode({
 
   const baseStyle: React.CSSProperties = {
     backgroundColor: style.backgroundColor,
-    color: style.color ?? "#1a1a1a",
+    backgroundImage: style.backgroundImage,
+    color: style.color ?? (isContainer ? undefined : "#1a1a1a"),
     fontSize: px(style.fontSize),
     fontWeight: style.fontWeight,
     lineHeight: typeof style.lineHeight === "number" ? `${style.lineHeight}px` : style.lineHeight,
     letterSpacing: px(style.letterSpacing),
+    textTransform: style.textTransform,
     // padding / shorthand + RN-style
     padding: px(style.padding),
     paddingTop: px(style.paddingTop ?? style.paddingVertical),
@@ -118,24 +121,43 @@ function PreviewNode({
     width: px(style.width),
     height: px(style.height),
     minHeight: px(style.minHeight),
+    maxHeight: px(style.maxHeight),
+    minWidth: px(style.minWidth),
     maxWidth: px(style.maxWidth ?? "100%"),
     borderRadius: px(style.borderRadius),
+    borderTopLeftRadius: px(style.borderTopLeftRadius),
+    borderTopRightRadius: px(style.borderTopRightRadius),
+    borderBottomLeftRadius: px(style.borderBottomLeftRadius),
+    borderBottomRightRadius: px(style.borderBottomRightRadius),
     borderWidth: px(style.borderWidth),
     borderColor: style.borderColor,
     borderStyle: style.borderWidth ? "solid" : undefined,
     textAlign: style.textAlign,
     opacity: style.opacity,
+    boxShadow: style.boxShadow,
     gap: px(style.gap),
+    rowGap: px(style.rowGap),
+    columnGap: px(style.columnGap),
     flexDirection: style.flexDirection ?? (isContainer ? "column" : undefined),
     justifyContent: style.justifyContent,
     alignItems: style.alignItems,
+    alignSelf: style.alignSelf,
     flex: style.flex,
+    flexShrink: style.flexShrink,
+    flexGrow: style.flexGrow,
     flexWrap: style.flexWrap,
     display: isContainer ? "flex" : undefined,
-    position: "relative",
+    position: style.position ?? "relative",
+    top: px(style.top),
+    bottom: px(style.bottom),
+    left: px(style.left),
+    right: px(style.right),
+    zIndex: style.zIndex,
     overflow: isContainer ? "hidden" : undefined,
     boxSizing: "border-box",
     wordBreak: "break-word",
+    transition: "transform 200ms ease, opacity 200ms ease",
+    backgroundClip: style.backgroundImage ? "padding-box" : undefined,
   };
 
   const selectionOverlay = isSelected ? (

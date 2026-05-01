@@ -129,3 +129,30 @@
     white-space: pre;
   }
 }
+
+/* Mobile preview entry animations — gives the AI design a "breathing" feel */
+@keyframes morphic-fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes morphic-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes morphic-pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+.morphic-preview-root > * {
+  animation: morphic-fade-up 380ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+.morphic-preview-root > *:nth-child(1) { animation-delay: 0ms; }
+.morphic-preview-root > *:nth-child(2) { animation-delay: 60ms; }
+.morphic-preview-root > *:nth-child(3) { animation-delay: 120ms; }
+.morphic-preview-root > *:nth-child(4) { animation-delay: 180ms; }
+.morphic-preview-root > *:nth-child(5) { animation-delay: 240ms; }
+.morphic-preview-root > *:nth-child(6) { animation-delay: 300ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .morphic-preview-root > * { animation: none; }
+}

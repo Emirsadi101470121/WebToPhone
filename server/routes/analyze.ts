@@ -288,19 +288,35 @@ async function generateDesignsPerPage(opts: {
     { name: "Profile", type: "profile" },
   ];
 
-  const systemPrompt = `You design ONE polished mobile screen as JSON. Return exactly 2 design options for the requested page.
+  const systemPrompt = `You are a SENIOR mobile UX designer. You design beautiful, polished mobile screens that look like they shipped from Linear, Stripe, Airbnb, or Apple. Output strict JSON.
 
-Element types: ScrollView, View, Text, Image. EVERY Text MUST have a "label" field with REAL human-readable content (e.g. "Wireless Headphones", "$129.00", "★ 4.8") — NEVER the words "Text", "Label", "Item", or empty string.
+Element types: ScrollView, View, Text, Image.
+EVERY Text MUST have a "label" field with REAL human-readable content (e.g. "Wireless Headphones", "$129.00", "★ 4.8 (128)") — NEVER the words "Text", "Label", "Item", or empty.
 
-REQUIRED structure per screen (in this order):
-1. Header View (height 56, padding 16): a title Text + a small icon View (28x28) on the right.
-2. Hero card View (minHeight 120, borderRadius 16, padding 20): title Text + subtitle Text.
-3. Content View (gap 12, padding 16) containing 4 list-item Views. Each item: row layout with Image (48x48 colored placeholder) + a column View (gap 4) containing title Text + subtitle Text.
-4. Bottom Nav View (height 64, padding 12) with 4 tab cells. Each tab: icon View (24x24) + label Text (fontSize 11).
+DESIGN RICHNESS — make screens feel ALIVE:
+- Use a coherent palette: 1 background, 1 surface, 1 accent, 2 text colors, plus an accent-soft for backgrounds of badges/chips.
+- Add visual hierarchy: large display title (28-32 fontSize, fontWeight 700), section headings (18, 600), body (14, 400), captions (12, 500, dim color).
+- Use SHADOWS on elevated cards: boxShadow "0 4px 12px rgba(0,0,0,0.08)" or "0 8px 24px rgba(0,0,0,0.12)" for hero.
+- Use GRADIENTS for hero/feature blocks: backgroundImage "linear-gradient(135deg, #6366f1, #8b5cf6)" — this is ALLOWED.
+- Use BADGES / pills: small Views with backgroundColor (e.g. accent-soft), borderRadius 999, paddingHorizontal 10, paddingVertical 4, containing a Text (fontSize 11, fontWeight 600).
+- Use STATUS DOTS: tiny Views (8x8, borderRadius 4) in green/red/amber.
+- Use DIVIDERS: thin Views (height 1, backgroundColor #00000010) between sections.
+- Use a SEARCH BAR if appropriate: View with borderRadius 12, padding 12, backgroundColor surface, with placeholder Text inside.
+- Use CATEGORY CHIPS: a horizontal-scroll-style row (flexDirection "row", gap 8, flexWrap "wrap" or scroll) with 4-6 pill Views.
+- Use a FAB (floating action button) when relevant: a circular View (56x56, borderRadius 28, accent backgroundColor, boxShadow) — render it as a regular child, not absolute.
+- Vary card layouts: some screens use grid (2-column), some use list, some use carousel-style horizontal rows.
 
-STYLE FIELDS allowed: backgroundColor, color, padding, paddingHorizontal, paddingVertical, paddingTop, paddingBottom, borderRadius, fontSize, fontWeight, gap, height, minHeight, width, flexDirection, alignItems, justifyContent. NO gradients, shadows, transforms.
+REQUIRED screen anatomy (you may add more, but at minimum):
+1. Status row + header (title left, action icons right).
+2. Optional: search bar OR category chips OR hero promo card.
+3. Main content section — at LEAST 5 items with REAL category-appropriate text, varied by row (mix images, badges, prices, ratings).
+4. Bottom navigation (4-5 tabs) with icon Views and labels.
 
-OUTPUT: ONLY valid JSON. No markdown. No fences. No commentary.`;
+STYLE FIELDS allowed: backgroundColor, backgroundImage (linear-gradient strings only), color, padding, paddingHorizontal, paddingVertical, paddingTop, paddingBottom, paddingLeft, paddingRight, margin, marginTop, marginBottom, borderRadius, borderWidth, borderColor, fontSize, fontWeight, letterSpacing, lineHeight, textAlign, textTransform, gap, rowGap, columnGap, height, minHeight, maxHeight, width, minWidth, maxWidth, flexDirection, flexWrap, alignItems, justifyContent, alignSelf, opacity, boxShadow.
+
+The TWO options must be VISUALLY DISTINCT — e.g. one light-bright with gradients and rounded cards, the other dark-elegant with high contrast and sharp accents.
+
+OUTPUT: ONLY valid JSON. No markdown. No fences. No commentary. Start with { and end with }.`;
 
   const promises = pageList.slice(0, 4).map(async (page: any) => {
     const userPrompt = `Design the "${page.name}" screen (${page.type || "main"}) for a ${category || "mobile"} app.

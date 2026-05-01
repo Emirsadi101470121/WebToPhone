@@ -66,12 +66,15 @@ function MiniPreview({ layout }: { layout: LayoutNode }) {
   const minH = layout.style?.minHeight ?? layout.style?.height;
   const style: React.CSSProperties = {
     backgroundColor: layout.style?.backgroundColor,
+    backgroundImage: layout.style?.backgroundImage,
     padding: scalePx(layout.style?.padding ?? layout.style?.paddingHorizontal, 0.4, 8),
     paddingTop: scalePx(layout.style?.paddingTop ?? layout.style?.paddingVertical, 0.4, 8),
     paddingBottom: scalePx(layout.style?.paddingBottom ?? layout.style?.paddingVertical, 0.4, 8),
     borderRadius: scalePx(layout.style?.borderRadius, 0.5, 8),
+    boxShadow: layout.style?.boxShadow ? "0 1px 3px rgba(0,0,0,0.1)" : undefined,
     display: "flex",
     flexDirection: (layout.style?.flexDirection as any) ?? "column",
+    flexWrap: (layout.style?.flexWrap as any),
     alignItems: layout.style?.alignItems,
     justifyContent: layout.style?.justifyContent,
     gap: scalePx(layout.style?.gap, 0.4, 4) ?? "2px",
