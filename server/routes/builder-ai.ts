@@ -3,6 +3,34 @@ import { createClient } from "@supabase/supabase-js";
 
 const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY;
 
+const ADMIN_EMAILS = (process.env.ADMIN_USER_EMAILS || "")
+  .split(",")
+  .map((e) => e.trim().toLowerCase())
+  .filter(Boolean);
+const ADMIN_USER_IDS = (process.env.ADMIN_USER_IDS || "")
+  .split(",")
+  .map((e) => e.trim())
+  .filter(Boolean);
+const adminEmailCache = new Map<string, string>();
+
+async function isAdminUser(userId: string): Promise<boolean> {
+  if (!userId) return false;
+  if (ADMIN_USER_IDS.includes(userId)) return true;
+  if (ADMIN_EMAILS.length === 0) return false;
+  let email = adminEmailCache.get(userId);
+  if (!email) {
+    try {
+      const supabase = getSupabase();
+      const { data } = await supabase.auth.admin.getUserById(userId);
+      email = (data?.user?.email || "").toLowerCase();
+      if (email) adminEmailCache.set(userId, email);
+    } catch {
+      return false;
+    }
+  }
+  return !!email && ADMIN_EMAILS.includes(email);
+}
+
 function getSupabase() {
   return createClient(
     process.env.VITE_SUPABASE_URL || "",
@@ -31,8 +59,8 @@ export const handleBuilderAI: RequestHandler = async (req, res) => {
       return;
     }
 
-    // Deduct 1 credit
-    if (userId) {
+    // Deduct 1 credit (admins bypass).
+    if (userId && !(await isAdminUser(userId))) {
       const supabase = getSupabase();
       const { data: credits } = await supabase
         .from("credits")
