@@ -3,6 +3,37 @@ import { createClient } from "@supabase/supabase-js";
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+// --- Admin allow-list (unlimited credits for these accounts) ---
+const ADMIN_EMAILS = (process.env.ADMIN_USER_EMAILS || "")
+  .split(",")
+  .map((e) => e.trim().toLowerCase())
+  .filter(Boolean);
+const ADMIN_USER_IDS = (process.env.ADMIN_USER_IDS || "")
+  .split(",")
+  .map((e) => e.trim())
+  .filter(Boolean);
+
+// Cache email lookups so we don't hit auth.admin on every request.
+const emailCache = new Map<string, string>();
+
+async function isAdminUser(userId: string): Promise<boolean> {
+  if (!userId) return false;
+  if (ADMIN_USER_IDS.includes(userId)) return true;
+  if (ADMIN_EMAILS.length === 0) return false;
+  let email = emailCache.get(userId);
+  if (!email) {
+    try {
+      const supabase = getSupabaseAdmin();
+      const { data } = await supabase.auth.admin.getUserById(userId);
+      email = (data?.user?.email || "").toLowerCase();
+      if (email) emailCache.set(userId, email);
+    } catch {
+      return false;
+    }
+  }
+  return !!email && ADMIN_EMAILS.includes(email);
+}
+
 function getSupabaseAdmin() {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
     throw new Error("Supabase config missing");
@@ -58,6 +89,22 @@ export async function deductCredits(
   modelTier: ModelTier = "sonnet"
 ): Promise<{ success: boolean; remaining: number; cost: number; error?: string }> {
   const cost = getCreditCost(operation, modelTier);
+
+  // Admin allow-list bypass — unlimited usage for listed accounts.
+  if (await isAdminUser(userId)) {
+    try {
+      const supabase = getSupabaseAdmin();
+      await supabase.from("logs").insert({
+        user_id: userId,
+        project_id: projectId,
+        action: "ai_query",
+        level: "info",
+        message: `${operation} [${modelTier}]: admin (no charge)`,
+      });
+    } catch { /* logging best effort */ }
+    return { success: true, remaining: 999999, cost: 0 };
+  }
+
   const supabase = getSupabaseAdmin();
 
   try {
@@ -117,6 +164,8 @@ export async function refundCredits(
   projectId?: string,
 ): Promise<void> {
   if (!userId || cost <= 0) return;
+  // Admins were never charged.
+  if (await isAdminUser(userId)) return;
   try {
     const supabase = getSupabaseAdmin();
     const { data: credits } = await supabase
