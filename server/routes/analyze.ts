@@ -5,18 +5,37 @@ import { sanitizeString, sanitizeUrl, isValidUUID } from "../lib/sanitize";
 const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY;
 
 function tryRepairJson(input: string): string {
-  // Repair truncated JSON: balance braces/brackets, drop trailing comma + partial token.
+  // Repair truncated JSON: walk the string, drop the trailing partial token,
+  // then balance any open braces/brackets/strings.
   let s = input.trim();
-  // Remove trailing partial string after last quote
-  const lastQuote = s.lastIndexOf('"');
-  const lastClose = Math.max(s.lastIndexOf("}"), s.lastIndexOf("]"));
-  if (lastClose < lastQuote) {
-    s = s.slice(0, lastQuote + 1);
-  }
-  // Drop trailing commas
-  s = s.replace(/,\s*$/, "");
-  // Count and balance brackets
+
+  // Step 1: walk char-by-char to find the last "safe" position (end of a complete value/struct).
   let openCurly = 0, openSquare = 0, inStr = false, esc = false;
+  let lastSafe = -1;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (esc) { esc = false; continue; }
+    if (c === "\\") { esc = true; continue; }
+    if (c === '"') { inStr = !inStr; if (!inStr) lastSafe = i; continue; }
+    if (inStr) continue;
+    if (c === "{") openCurly++;
+    else if (c === "}") { openCurly--; lastSafe = i; }
+    else if (c === "[") openSquare++;
+    else if (c === "]") { openSquare--; lastSafe = i; }
+    else if (c === "," || c === ":") { /* boundaries, ignored */ }
+    else if (/[0-9truefalsn]/i.test(c)) lastSafe = i;
+  }
+
+  // If we ended inside a partial token/string, cut back to the last safe boundary.
+  if (inStr || lastSafe < s.length - 1) {
+    s = s.slice(0, lastSafe + 1);
+  }
+
+  // Drop trailing commas before closers.
+  s = s.replace(/,(\s*)$/g, "");
+
+  // Recount balances on trimmed string.
+  openCurly = 0; openSquare = 0; inStr = false; esc = false;
   for (const c of s) {
     if (esc) { esc = false; continue; }
     if (c === "\\") { esc = true; continue; }
@@ -28,6 +47,10 @@ function tryRepairJson(input: string): string {
     else if (c === "]") openSquare--;
   }
   if (inStr) s += '"';
+  // Strip dangling key like `,"foo":` or `"foo":` at the end.
+  s = s.replace(/,?\s*"[^"]*"\s*:\s*$/g, "");
+  // Strip dangling comma again post-cleanup.
+  s = s.replace(/,(\s*)$/g, "");
   while (openSquare-- > 0) s += "]";
   while (openCurly-- > 0) s += "}";
   return s;
@@ -333,9 +356,9 @@ CRITICAL OUTPUT RULES:
 - Start with { and end with }.
 - Keep response under 14000 tokens but DO produce dense, complete screens.`;
 
-    // Trim to keep within token budget
-    const pages = (analysis?.pages || []).slice(0, 3);
-    const features = (analysis?.features || []).slice(0, 6);
+    // Trim to keep within token budget. 2 pages × 2 options × dense layout fits within 16k tokens.
+    const pages = (analysis?.pages || []).slice(0, 2);
+    const features = (analysis?.features || []).slice(0, 5);
     const flows = (analysis?.userFlows || []).slice(0, 2);
 
     const userPrompt = `Reimagine this web app as a polished, content-rich mobile experience. Generate REAL designs that look like a finished app, not wireframes.
@@ -376,11 +399,23 @@ Output ONLY this exact JSON shape:
   ]
 }`;
 
-    const result = await callClaude(systemPrompt, userPrompt, modelTier, 12000);
-    const parsed = extractJson(result) ?? { designs: [] };
+    const result = await callClaude(systemPrompt, userPrompt, modelTier, 16000);
+    let parsed: any = extractJson(result) ?? { designs: [] };
+
+    // Salvage: if parse failed but raw has page designs, try to keep partial valid pages.
+    if ((!parsed.designs || parsed.designs.length === 0) && result) {
+      const matches = result.match(/\{\s*"pageName"\s*:[\s\S]*?(?=,?\s*\{\s*"pageName"|\]\s*\}|$)/g);
+      if (matches) {
+        const salvaged: any[] = [];
+        for (const m of matches) {
+          try { salvaged.push(JSON.parse(tryRepairJson(m))); } catch {}
+        }
+        if (salvaged.length > 0) parsed = { designs: salvaged };
+      }
+    }
 
     if (!parsed.designs || parsed.designs.length === 0) {
-      console.error("[reimagine] empty designs. Raw response (first 1000 chars):", result.slice(0, 1000));
+      console.error("[reimagine] empty designs. Raw response length:", result.length, "first 500:", result.slice(0, 500), "last 500:", result.slice(-500));
       if (userId && creditsCharged > 0) {
         await refundCredits(userId, creditsCharged, "reimagine", projectIdForRefund);
       }
