@@ -44,10 +44,25 @@ function aiLayoutToTreeNode(layout: any, idPath: string): TreeNode {
   return { id: idPath, type, label, props, children };
 }
 
-// Build one TreeNode per AI-designed page (each becomes its own screen).
+// App-flow priority: lower number = earlier in the boot sequence.
+function screenFlowOrder(label: string): number {
+  const n = (label || "").toLowerCase();
+  if (/splash|welcome/.test(n)) return 0;
+  if (/sign\s*in|log\s*in|login|sign\s*up/.test(n)) return 1;
+  if (/auth|onboard/.test(n)) return 2;
+  if (/^home|dashboard|feed|discover|explore/.test(n)) return 3;
+  if (/search|browse/.test(n)) return 4;
+  if (/detail|product/.test(n)) return 5;
+  if (/cart|checkout|order/.test(n)) return 6;
+  if (/profile|account|settings/.test(n)) return 9;
+  return 7;
+}
+
+// Build one TreeNode per AI-designed page (each becomes its own screen),
+// ordered by natural app flow so the phone "boots" to the entry screen first.
 export function buildScreensFromSession(componentTree: any[]): TreeNode[] {
   if (!componentTree?.length) return [];
-  return componentTree.map((page: any, i: number) => {
+  const built = componentTree.map((page: any, i: number) => {
     const layout = page.layout && typeof page.layout === "object"
       ? page.layout
       : { type: "ScrollView", style: { backgroundColor: "#ffffff", padding: 16 }, children: [] };
@@ -55,6 +70,7 @@ export function buildScreensFromSession(componentTree: any[]): TreeNode[] {
     screen.label = page.pageName || `Page ${i + 1}`;
     return screen;
   });
+  return built.sort((a, b) => screenFlowOrder(a.label) - screenFlowOrder(b.label));
 }
 
 // Backwards-compat: returns the FIRST screen as the active tree.
@@ -490,6 +506,16 @@ export default function Builder() {
             onSelect={handleSelect}
             device={device}
             onDeviceChange={setDevice}
+            screenLabels={screens.map((s) => s.label)}
+            onNavigateToScreen={(label) => {
+              const idx = screens.findIndex((s) => s.label === label);
+              if (idx >= 0 && idx !== activeScreenIndex) {
+                setActiveScreenIndex(idx);
+                setTree([screens[idx]]);
+                setSelectedNode(null);
+                toast.success(`Navigated to ${label}`);
+              }
+            }}
           />
         </div>
       </div>

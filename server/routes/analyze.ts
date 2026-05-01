@@ -271,6 +271,58 @@ function realisticTextFor(category: string): string[] {
   return ["Welcome back", "Continue where you left off", "View all", "Recent Activity", "Updated 5 min ago", "Open", "Quick Actions", "Tap to explore", "Go", "Notifications", "3 new updates", "Review", "Home", "Browse", "Activity", "Profile"];
 }
 
+function screenSpecFor(page: any): string {
+  const t = (page.type || "").toLowerCase();
+  const n = (page.name || "").toLowerCase();
+  if (t === "auth" || /sign\s*in|login|sign\s*up|welcome|splash/.test(n)) {
+    return `1. Logo / brand mark (centered, large) with app name Text below.
+2. Tagline Text (e.g. "Your favorites, delivered fast.").
+3. Two large buttons: "Continue with Google" and "Continue with Apple" (View with icon + Text).
+4. Email input field (View styled like an input with placeholder Text).
+5. Primary "Sign In" button (filled, accent color).
+6. Footer Text: "Don't have an account? Sign up" (link styled).
+NO bottom nav on this screen.`;
+  }
+  if (t === "profile" || /profile|account/.test(n)) {
+    return `1. Header with title "Profile" + settings icon.
+2. Avatar (Image circle 80x80) + name Text + email Text.
+3. Stats row: 3 stat cards (e.g. orders, points, saved).
+4. Settings list (5 rows): Account, Notifications, Privacy, Help, Sign Out — each with icon + label + chevron-View.
+5. Bottom nav (Home / Search / Activity / Profile).`;
+  }
+  if (t === "settings" || /settings/.test(n)) {
+    return `1. Header with back arrow + title "Settings".
+2. Section: Account (3 rows with icon + label + chevron).
+3. Section: Notifications (3 toggle rows: label + small toggle View).
+4. Section: Appearance (theme picker chips).
+5. Sign Out button (full width, danger color).`;
+  }
+  if (/cart|checkout|order/.test(n)) {
+    return `1. Header with back arrow + title "Cart".
+2. 3 cart-item rows: Image (60x60) + name Text + variant Text + qty stepper + price Text.
+3. Promo code input row.
+4. Summary card: subtotal, shipping, tax, total.
+5. Big "Checkout" CTA button.`;
+  }
+  if (/detail|product/.test(n)) {
+    return `1. Header (back + share + heart icons).
+2. Hero Image (large, ~280 height).
+3. Title (28px, bold) + subtitle/category Text.
+4. Price row + rating + review-count.
+5. Description Text (3-4 sentences).
+6. Variant chips row.
+7. Big "Add to Cart" CTA.`;
+  }
+  // Default home/feed/dashboard
+  return `1. Header (greeting "Good morning, Alex" + bell icon).
+2. Search bar (rounded input with placeholder).
+3. Category chips row (5 horizontal pills).
+4. Featured/hero card with gradient + title + subtitle + CTA.
+5. Section heading "Trending" + 3-4 list cards (image + title + meta).
+6. Section heading "Recommended" + 2-card grid.
+7. Bottom nav (Home / Search / Activity / Profile).`;
+}
+
 async function generateDesignsPerPage(opts: {
   pages: any[];
   features: any[];
@@ -283,10 +335,15 @@ async function generateDesignsPerPage(opts: {
 }): Promise<any[]> {
   const { pages, features, palette, style, theme, category, appDescription, modelTier } = opts;
 
-  const pageList = pages.length > 0 ? pages : [
+  // Always include a Sign In screen as the app entry point, then app pages.
+  const userPages = pages.length > 0 ? pages : [
     { name: "Home", type: "main" },
     { name: "Profile", type: "profile" },
   ];
+  const hasAuth = userPages.some((p: any) =>
+    /^(sign\s*in|sign\s*up|login|log\s*in|auth|welcome|splash|onboard)/i.test(p.name || ""),
+  );
+  const pageList = hasAuth ? userPages : [{ name: "Sign In", type: "auth" }, ...userPages];
 
   const systemPrompt = `You are a SENIOR mobile UX designer. You design beautiful, polished mobile screens that look like they shipped from Linear, Stripe, Airbnb, or Apple. Output strict JSON.
 
@@ -318,15 +375,21 @@ The TWO options must be VISUALLY DISTINCT — e.g. one light-bright with gradien
 
 OUTPUT: ONLY valid JSON. No markdown. No fences. No commentary. Start with { and end with }.`;
 
-  const promises = pageList.slice(0, 4).map(async (page: any) => {
+  const promises = pageList.slice(0, 5).map(async (page: any) => {
+    const screenSpec = screenSpecFor(page);
     const userPrompt = `Design the "${page.name}" screen (${page.type || "main"}) for a ${category || "mobile"} app.
 Brief: ${(appDescription || "").slice(0, 150)}
 Visual style: ${style}. Theme: ${theme}. Palette hint: ${palette.join(", ") || "designer's choice"}.
 Relevant features: ${features.slice(0, 4).join(", ")}.
 
-Return EXACTLY this JSON shape (2 options, visually different):
+SCREEN-SPECIFIC ANATOMY:
+${screenSpec}
+
+Bottom nav tab labels MUST be SHORT single words (e.g. "Home", "Search", "Cart", "Profile") — no spaces, no slashes, max 8 characters each. The nav tab labels MUST be the names of the OTHER app screens so the user can navigate.
+
+Return EXACTLY this JSON shape (2 options, visually distinct):
 {"options":[
-  {"id":"opt-a","name":"<2-3 word name>","description":"<short>","layout":{"type":"ScrollView","style":{"backgroundColor":"#hex","padding":0},"children":[/*header, hero, content, bottom nav with REAL labels*/]}},
+  {"id":"opt-a","name":"<2-3 word name>","description":"<short>","layout":{"type":"ScrollView","style":{"backgroundColor":"#hex","padding":0},"children":[/*screen content matching the anatomy above*/]}},
   {"id":"opt-b","name":"<2-3 word name>","description":"<short>","layout":{"type":"ScrollView","style":{"backgroundColor":"#hex","padding":0},"children":[/*alternative visual approach*/]}}
 ]}`;
 

@@ -16,9 +16,29 @@ interface Props {
   onSelect: (node: TreeNode) => void;
   device: DeviceType;
   onDeviceChange: (d: DeviceType) => void;
+  /** All screen labels for in-phone tap-to-navigate. */
+  screenLabels?: string[];
+  onNavigateToScreen?: (label: string) => void;
 }
 
-export default function MobilePreview({ nodes, selectedId, onSelect, device, onDeviceChange }: Props) {
+function findNavigationTargetText(node: TreeNode): string | null {
+  if (node.type === "Text") {
+    const t = (node.props?.text ?? node.label ?? "").toString().trim();
+    return t || null;
+  }
+  if (node.children) {
+    for (const c of node.children) {
+      const t = findNavigationTargetText(c);
+      if (t) return t;
+    }
+  }
+  return null;
+}
+
+export default function MobilePreview({
+  nodes, selectedId, onSelect, device, onDeviceChange,
+  screenLabels = [], onNavigateToScreen,
+}: Props) {
   const d = DEVICES[device];
 
   return (
@@ -72,6 +92,8 @@ export default function MobilePreview({ nodes, selectedId, onSelect, device, onD
                   node={node}
                   selectedId={selectedId}
                   onSelect={onSelect}
+                  screenLabels={screenLabels}
+                  onNavigateToScreen={onNavigateToScreen}
                 />
               </div>
             ))}
@@ -86,10 +108,14 @@ function PreviewNode({
   node,
   selectedId,
   onSelect,
+  screenLabels = [],
+  onNavigateToScreen,
 }: {
   node: TreeNode;
   selectedId: string | null;
   onSelect: (node: TreeNode) => void;
+  screenLabels?: string[];
+  onNavigateToScreen?: (label: string) => void;
 }) {
   const isSelected = node.id === selectedId;
   const style = node.props?.style ?? {};
@@ -168,12 +194,43 @@ function PreviewNode({
     </div>
   ) : null;
 
+  // Tap-to-navigate: if clicking this node maps to another screen, switch screens.
+  const tryNavigate = (e: React.MouseEvent): boolean => {
+    if (!onNavigateToScreen || screenLabels.length === 0) return false;
+    // Use the text inside this node (its own text or first descendant Text).
+    const candidateText = node.type === "Text"
+      ? (node.props?.text ?? node.label ?? "").toString().trim()
+      : findNavigationTargetText(node) ?? "";
+    if (!candidateText) return false;
+    const norm = candidateText.toLowerCase().replace(/\s+/g, "");
+    const match = screenLabels.find(
+      (lbl) => lbl.toLowerCase().replace(/\s+/g, "") === norm,
+    );
+    if (match) {
+      e.stopPropagation();
+      onNavigateToScreen(match);
+      return true;
+    }
+    return false;
+  };
+
   if (node.type === "Text") {
+    // Tab-style text inside a small cell (height ~64 nav) shouldn't wrap.
+    const textStyle: React.CSSProperties = {
+      ...baseStyle,
+      whiteSpace: typeof style.fontSize === "number" && style.fontSize <= 12 ? "nowrap" : baseStyle.whiteSpace,
+      overflow: typeof style.fontSize === "number" && style.fontSize <= 12 ? "hidden" : baseStyle.overflow,
+      textOverflow: "ellipsis",
+    };
     return (
       <div
-        onClick={(e) => { e.stopPropagation(); onSelect(node); }}
+        onClick={(e) => {
+          if (tryNavigate(e)) return;
+          e.stopPropagation();
+          onSelect(node);
+        }}
         className="cursor-pointer transition-all hover:outline hover:outline-1 hover:outline-violet-400/30"
-        style={baseStyle}
+        style={textStyle}
       >
         {selectionOverlay}
         {node.props?.text ?? node.label}
@@ -189,6 +246,7 @@ function PreviewNode({
         style={{
           ...baseStyle,
           backgroundColor: style.backgroundColor ?? "#e4e4e7",
+          backgroundImage: style.backgroundImage ?? "linear-gradient(135deg, rgba(0,0,0,0.04), rgba(0,0,0,0.10))",
           height: px(style.height) ?? 120,
           display: "flex",
           alignItems: "center",
@@ -202,7 +260,11 @@ function PreviewNode({
 
   return (
     <div
-      onClick={(e) => { e.stopPropagation(); onSelect(node); }}
+      onClick={(e) => {
+        if (tryNavigate(e)) return;
+        e.stopPropagation();
+        onSelect(node);
+      }}
       className="cursor-pointer transition-all hover:outline hover:outline-1 hover:outline-violet-400/30"
       style={baseStyle}
     >
@@ -213,6 +275,8 @@ function PreviewNode({
           node={child}
           selectedId={selectedId}
           onSelect={onSelect}
+          screenLabels={screenLabels}
+          onNavigateToScreen={onNavigateToScreen}
         />
       ))}
     </div>
